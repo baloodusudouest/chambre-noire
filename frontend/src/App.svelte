@@ -1,11 +1,13 @@
 <script>
   // Navigation commune aux applis : rail à gauche sur PC, pilule d'icônes en bas sur iPhone.
-  // Chambre noire 0.1.0 : Scanner (écran de travail), Connexion (Immich et son apprentissage), Réglages.
-  // « À traiter » arrive avec la zone d'attente (étape 2) : une tuile vide ne se livre pas.
+  // Chambre noire : Scanner (écran de travail), À traiter (0.2.0 : prises en attente), Connexion, Réglages.
   import { onMount } from 'svelte'
   import { fly } from 'svelte/transition'
   import Camera from '@lucide/svelte/icons/camera'
   import Network from '@lucide/svelte/icons/network'
+  import Inbox from '@lucide/svelte/icons/inbox'
+  import { abonner, reprendre } from '$lib/fileEnvoi.js'
+  import ATraiter from './pages/ATraiter.svelte'
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal'
   import { api } from '$lib/api.js'
   import Connexion from './pages/Connexion.svelte'
@@ -15,6 +17,7 @@
 
   const onglets = [
     { page: 'scanner', nom: 'Scanner', icone: Camera },
+    { page: 'a-traiter', nom: 'À traiter', icone: Inbox },
     { page: 'connexion', nom: 'Connexion', icone: Network },
     { page: 'reglages', nom: 'Réglages', icone: SlidersHorizontal },
   ]
@@ -22,6 +25,8 @@
   let connecte = $state(null) // null : on ne sait pas encore
   let session = $state({ version: '', lecture_seule: false })
   let page = $state(lirePage())
+  let file = $state({ surIphone: 0, connexion: false })
+  abonner((e) => { file = e; if (e.connexion && connecte) connecte = false })
 
   function lirePage() {
     const p = location.hash.replace('#/', '')
@@ -33,6 +38,7 @@
       const s = await api.get('/api/session')
       session = s
       connecte = s.connecte
+      if (connecte) reprendre()   // les prises gardées sur l'iPhone repartent
     } catch {
       connecte = false
     }
@@ -70,6 +76,9 @@
         >
           <Icone class="size-[1.15rem]" aria-hidden="true" />
           <span class="sr-only md:not-sr-only">{o.nom}</span>
+          {#if o.page === 'a-traiter' && file.surIphone}
+            <span class="rounded-full bg-primary px-1.5 text-xs text-primary-foreground tabular-nums" aria-label="{file.surIphone} sur l’iPhone">{file.surIphone}</span>
+          {/if}
         </a>
       {/each}
     </nav>
@@ -84,7 +93,9 @@
       {/if}
       {#key page}
         <div in:fly={{ y: 6, duration: 180 }}>
-          {#if page === 'connexion'}
+          {#if page === 'a-traiter'}
+            <ATraiter ondeconnecte={() => (connecte = false)} />
+          {:else if page === 'connexion'}
             <Services ondeconnecte={() => (connecte = false)} />
           {:else if page === 'reglages'}
             <Reglages {session} {deconnecter} />

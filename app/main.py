@@ -1,20 +1,23 @@
 """Chambre noire : numérisation des tirages papier à l'iPhone vers Immich (FastAPI + interface Svelte).
 
-0.1.0 (squelette, étape 1 du plan) : /health (publique, sans aucun nom), /api/session, /api/connexion,
-/api/deconnexion, /api/services (état d'Immich, permissions de la clé, service d'apprentissage),
-puis l'interface. Rien n'est encore écrit dans Immich.
+0.1.0 (squelette) : /health (publique, sans aucun nom), /api/session, /api/connexion, /api/deconnexion,
+/api/services (état d'Immich, permissions de la clé, service d'apprentissage), puis l'interface.
+0.2.0 (zone d'attente) : /api/prises (réception idempotente), /api/sections, images des prises.
+Rien n'est encore écrit dans Immich.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 from . import __version__
+from .attente import Attente, ErreurPrise
 from .auth import COMMUN, DUREE, Sessions
 from .config import APPLI, Config, charger
 from .immich import ApprentissageImmich, Immich
@@ -40,7 +43,7 @@ async def cycle(app: FastAPI):
     cfg.data.mkdir(parents=True, exist_ok=True)
     transport = ETAT.get("transport")        # faux Immich dans les tests
     ETAT.update(cfg=cfg, sessions=Sessions(APPLI, cfg.password, _lire_generation(cfg)),
-                immich=Immich(cfg.immich_url, cfg.immich_cle, transport),
+                immich=Immich(cfg.immich_url, cfg.immich_cle, transport), attente=Attente(cfg.data),
                 apprentissage=ApprentissageImmich(cfg.ml_url, transport))
     yield
 
@@ -84,7 +87,8 @@ async def _lecture_seule(_: Request, exc: LectureSeule):
 def sante():
     # Pour la tuile de l'Anneau : des nombres, jamais de nom. Prises en attente et photos envoyées
     # arrivent avec la zone d'attente (étape 2) et l'envoi (étape 4).
-    return {"ok": True, "appli": APPLI, "version": __version__, "en_attente": 0, "envoyees": 0}
+    return {"ok": True, "appli": APPLI, "version": __version__,
+            "en_attente": ETAT["attente"].en_attente(), "envoyees": 0}
 
 
 # ================================================================ connexion
@@ -129,6 +133,47 @@ def services():
     """Lit l'état d'Immich (version, clé, permissions) et du service d'apprentissage. N'écrit rien."""
     return {"immich": asdict(ETAT["immich"].etat()), "apprentissage": ETAT["apprentissage"].etat(),
             "lecture_seule": ETAT["cfg"].lecture_seule}
+
+
+# ================================================================ zone d'attente (étape 2)
+
+@app.post("/api/prises", status_code=201)
+async def recevoir_prise(meta: str = Form(...), rendu: UploadFile = File(...), source: UploadFile | None = File(None)):
+    """Reçoit une prise de l'iPhone. Réponse 201 = prise en sécurité sur le NAS (l'iPhone peut l'effacer
+    de sa file). Un renvoi du même identifiant répond aussi 201, avec « deja »."""
+    try:
+        donnees = json.loads(meta)
+        corps_rendu = await rendu.read()
+        corps_source = await source.read() if source else None
+        return await asyncio.to_thread(ETAT["attente"].recevoir, donnees, corps_rendu, corps_source)
+    except (ErreurPrise, json.JSONDecodeError, TypeError, ValueError) as e:
+        raise HTTPException(422, str(e) or "Prise illisible.")
+
+
+@app.get("/api/sections")
+def sections():
+    return {"sections": ETAT["attente"].sections()}
+
+
+@app.get("/api/sections/{section}/prises")
+def prises_de_section(section: str):
+    return {"prises": ETAT["attente"].prises(section)}
+
+
+@app.get("/api/prises/{pid}/{quoi}.jpg")
+def image_de_prise(pid: str, quoi: str):
+    chemin = ETAT["attente"].fichier(pid, quoi)
+    if not chemin:
+        raise HTTPException(404, "Prise introuvable.")
+    return FileResponse(chemin, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@app.delete("/api/prises/{pid}")
+def retirer_prise(pid: str):
+    """Retire une prise pas encore envoyée (ratée, en double). N'écrit rien dans Immich."""
+    if not ETAT["attente"].retirer(pid):
+        raise HTTPException(404, "Prise introuvable ou déjà envoyée.")
+    return {"ok": True}
 
 
 # ================================================================ interface

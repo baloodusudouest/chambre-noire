@@ -47,7 +47,8 @@ def test_health_publique_sans_nom(tmp_path):
     c, _ = client(tmp_path)
     with c:
         r = c.get("/health").json()
-    assert r["ok"] and r["appli"] == "chambre-noire" and r["version"] == "0.1.0"
+    from app import __version__
+    assert r["ok"] and r["appli"] == "chambre-noire" and r["version"] == __version__
     assert set(r) == {"ok", "appli", "version", "en_attente", "envoyees"}
 
 

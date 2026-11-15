@@ -8,12 +8,15 @@ numériser à l'iPhone les tirages papier d'albums familiaux et les envoyer dans
 Dossier complet (besoin, technique, parcours, design, données, plan, écarts, avis du conseil) : `docs/dossier.md`.
 
 ## État (15/11/2026)
-- **0.1.0** : squelette. Connexion (Immich, permissions de la clé, apprentissage), Réglages, Scanner (annonce).
-  17 tests verts en local (15 API, 2 écran). Rien d'essayé sur la vraie installation.
+- **0.1.0** : squelette, déployé et vérifié sur le NAS (Connexion verte avec la vraie clé).
+- **0.2.0** : zone d'attente (NAS : réception idempotente, SQLite, fichiers dans /data/attente ; iPhone : file
+  d'envoi avec accusé de réception) et écran À traiter. 26 tests verts en local. Pas encore essayée sur le NAS.
+- Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :
+  à ajouter à la sauvegarde (avis du conseil) ou à vider souvent en envoyant.
 
 ## Prochaine étape (plan revu par le conseil)
-1. ~~Squelette~~ → déployer à côté de Scan Immich (port 8100), vérifier Connexion avec la vraie clé.
-2. Zone d'attente : file d'envoi de l'iPhone avec accusé de réception, identifiant par prise, SQLite, reprise.
+1. ~~Squelette~~ (fait, vérifié sur le NAS).
+2. ~~Zone d'attente~~ (0.2.0).
 3. Caméra et détection : portage de `findPrint`, `findPrintNested`, `quadFromHull`, `findPrintLines` et du rendu
    (repris tels quels de Scan Immich v3.9), trois modes, banc d'images réelles des fonds difficiles.
 4. Envoi : EXIF/XMP, album, tag, description (nom d'album), rangement ; journal + Annuler limité au journal.
