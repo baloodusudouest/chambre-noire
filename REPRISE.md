@@ -11,14 +11,15 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
 - **0.1.0** : squelette, déployé et vérifié sur le NAS (Connexion verte avec la vraie clé).
 - **0.2.0** : zone d'attente (NAS : réception idempotente, SQLite, fichiers dans /data/attente ; iPhone : file
   d'envoi avec accusé de réception) et écran À traiter. 26 tests verts en local. Pas encore essayée sur le NAS.
+- **0.3.0** : caméra et détection (code de Scan Immich repris tel quel), trois modes, prises envoyées au NAS.
+  28 tests verts (dont caméra simulée). Jamais essayée sur un iPhone : il faut l'adresse HTTPS (tailscale serve).
 - Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :
   à ajouter à la sauvegarde (avis du conseil) ou à vider souvent en envoyant.
 
 ## Prochaine étape (plan revu par le conseil)
 1. ~~Squelette~~ (fait, vérifié sur le NAS).
 2. ~~Zone d'attente~~ (0.2.0).
-3. Caméra et détection : portage de `findPrint`, `findPrintNested`, `quadFromHull`, `findPrintLines` et du rendu
-   (repris tels quels de Scan Immich v3.9), trois modes, banc d'images réelles des fonds difficiles.
+3. ~~Caméra et détection~~ (0.3.0). Reste : banc d'images réelles des fonds difficiles (tests/images).
 4. Envoi : EXIF/XMP, album, tag, description (nom d'album), rangement ; journal + Annuler limité au journal.
 5. Orientation sur le NAS (ML d'Immich).
 6. Bascule : rafales de Scan Immich envoyées, remplacement direct de l'adresse HTTPS (choix de Julien).
@@ -30,6 +31,9 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
   non datées gardent l'album et le tag que lit Millésime.
 
 ## Pièges
+- Les tests de caméra baissent les seuils de définition (`window.__reglagesCamera`, seulement avec `?essai`) :
+  les caméras simulées font 1440 px. Ne pas baisser `REGLAGES.minPx` dans le code.
+- `wait_for_function` de Playwright n'attend pas une promesse : interroger le NAS en Python (`_attendre`).
 - `pages/Connexion.svelte` est la page du mot de passe ; l'écran « Connexion » est `pages/Services.svelte`.
 - La caméra exige HTTPS (tailscale serve) et refuse un cadre servi en http : la tuile de l'Anneau s'ouvre à côté.
 - Un seul service par port `tailscale serve` : vérifier `tailscale serve status` avant d'attribuer un port.

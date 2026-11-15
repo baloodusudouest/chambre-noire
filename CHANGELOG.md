@@ -1,5 +1,16 @@
 # Journal des versions
 
+## 0.3.0 — 15 novembre 2026
+Caméra et détection (étape 3 du plan).
+- Écran **Scanner** : Rafale, 1 photo, Page d'album, puis caméra plein écran (caméra arrière, plus grande définition 4:3 ou 4K).
+- Détection reprise **telle quelle** de Scan Immich v3.9 (`lib/scan/detection.js` : `findPrint`, `findPrintNested`, `quadFromHull`, `findPrintLines`, `orderPts`) et rendu (`lib/scan/rendu.js` : redressement, filtre « restauration » 70 %, grain à graine fixe). OpenCV.js 4.10 servi par l'appli (`/opencv.js`), aucun appel extérieur.
+- Prise automatique quand le tirage est immobile 0,9 s et assez défini (1 800 px de grand côté ; 1 200 px par tirage en mode Page), bloquée en dessous ; déclencheur toujours disponible ; bouton de mode à côté du déclencheur ; « Terminer » mène à « À traiter ».
+- Chaque prise (image rendue + image source + coins) part aussitôt dans la file d'envoi ; compteur « n prises · n sur le NAS ».
+- Sections : une par rafale (jusqu'à « Terminer »), une par photo en mode 1 photo, une par page en mode Page.
+- La caméra exige HTTPS : ouvrir Chambre noire par son adresse Tailscale (`tailscale serve`).
+- Tests : 2 tests de caméra simulée (rafale : prise automatique jusqu'au NAS ; page : 4 tirages dans une section). 28 tests en tout. Jamais essayée sur un iPhone.
+- Pas encore : rotation (étape 5 pour l'automatique ; à la main à l'étape 4), choix du filtre, date et envoi dans Immich (étape 4).
+
 ## 0.2.0 — 15 novembre 2026
 Zone d'attente (étape 2 du plan).
 - **NAS** : `POST /api/prises` reçoit chaque prise (image rendue + source + coins, rotation, filtre) dès qu'elle est faite. Identifiant fixé par l'iPhone : un renvoi répond « déjà reçue », jamais de doublon. Fichiers écrits en entier puis renommés ; base SQLite `chambre-noire.db` dans `/data`. Prises consultables et retirables tant qu'elles ne sont pas envoyées.
