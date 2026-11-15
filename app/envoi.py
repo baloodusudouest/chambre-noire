@@ -18,7 +18,7 @@ import httpx
 from PIL import Image
 
 from .attente import Attente
-from .metadonnees import date_prise, decalage, injecter
+from .metadonnees import PARIS, date_prise, decalage, injecter
 
 MOIS = ["", "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 
@@ -155,7 +155,7 @@ class Envoyeur:
         prises = self.attente.prises_a_envoyer(sid)
         # heure de la section dans la journée (ordre des séances d'un même mois), +1 s par photo
         try:
-            debut = datetime.fromisoformat(prises[0]["prise_le"].replace("Z", "+00:00")).astimezone()
+            debut = datetime.fromisoformat(prises[0]["prise_le"].replace("Z", "+00:00")).astimezone(PARIS)
             base = debut.hour * 3600 + debut.minute * 60 + debut.second
         except (ValueError, IndexError):
             base = 12 * 3600
