@@ -59,11 +59,20 @@
     await Promise.resolve()
     camera = new Camera(video, dessiner)
     camera.mode = m
+    camera.surPrise = declencherFlash
     const avant = camera.prises
     const compter = setInterval(() => { if (camera) prisesSession = camera.prises - avant }, 250)
     camera._compter = compter
     try { await camera.ouvrir() }
     catch (e) { erreur = 'Caméra inaccessible : ' + e.message; fermer() }
+  }
+
+  // Flash blanc au moment de la prise (automatique ou déclencheur) : apparition immédiate, fondu en 0,35 s
+  let flashMinuterie = 0
+  function declencherFlash() {
+    clearTimeout(flashMinuterie)
+    flash = true
+    flashMinuterie = setTimeout(() => (flash = false), 90)
   }
 
   function fermer() {
@@ -80,7 +89,6 @@
   async function declencher() {
     if (!camera) return
     if (vue.tropPetit) { erreur = `Tirage trop petit dans l’image (${vue.px.toLocaleString('fr-FR')} px) : rapproche le téléphone.`; return }
-    flash = true; setTimeout(() => (flash = false), 80)
     const n = await camera.prendre()
     if (!n) erreur = 'Aucun tirage détecté.'
   }
@@ -137,7 +145,8 @@
     <!-- svelte-ignore a11y_media_has_caption -->
     <video bind:this={video} playsinline muted class="absolute inset-0 size-full object-cover"></video>
     <canvas bind:this={calque} class="pointer-events-none absolute inset-0 size-full"></canvas>
-    <div class="pointer-events-none absolute inset-0 bg-white transition-opacity duration-75 {flash ? 'opacity-60' : 'opacity-0'}"></div>
+    <div class="pointer-events-none absolute inset-0 bg-white {flash ? 'opacity-85' : 'opacity-0 transition-opacity duration-350 ease-out'}"
+         data-flash={flash ? 'oui' : 'non'}></div>
 
     <div class="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-6 text-white">
       <button type="button" onclick={fermer} class="rounded-full bg-black/50 p-2" aria-label="Fermer la caméra"><X class="size-5" /></button>

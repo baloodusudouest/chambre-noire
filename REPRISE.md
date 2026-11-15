@@ -12,7 +12,8 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
 - **0.2.0** : zone d'attente (NAS : réception idempotente, SQLite, fichiers dans /data/attente ; iPhone : file
   d'envoi avec accusé de réception) et écran À traiter. 26 tests verts en local. Pas encore essayée sur le NAS.
 - **0.3.0** : caméra et détection (code de Scan Immich repris tel quel), trois modes, prises envoyées au NAS.
-  28 tests verts (dont caméra simulée). Jamais essayée sur un iPhone : il faut l'adresse HTTPS (tailscale serve).
+  28 tests verts (dont caméra simulée). Essayée sur l'iPhone (HTTPS :8445 par tailscale serve) : détection OK.
+- **0.3.1** : flash à l'écran à chaque prise.
 - Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :
   à ajouter à la sauvegarde (avis du conseil) ou à vider souvent en envoyant.
 

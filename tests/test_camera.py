@@ -48,10 +48,14 @@ def test_rafale_prise_automatique(adresse):
     with pw.sync_playwright() as p:
         b, page, erreurs = _ouvrir(p, "cam3.y4m", adresse)
         depart = _sante(page)
+        page.evaluate("""() => { window.__flashs = 0; new MutationObserver(m => m.forEach(x => {
+            if (x.target.dataset && x.target.dataset.flash === 'oui') window.__flashs++ })).observe(document.body,
+            {subtree: true, attributes: true, attributeFilter: ['data-flash']}) }""")
         page.click("text=Rafale")
         _attendre(page, lambda n: n > depart)
         page.wait_for_function("window.__fileEnvoi.etat.surIphone === 0", timeout=30000)
         statut = page.text_content("[role=status]")
+        flashs = page.evaluate("window.__flashs")
         page.click("text=Terminer")
         page.wait_for_selector("h1:has-text('À traiter')")
         page.wait_for_selector("text=Rafale du")
@@ -66,6 +70,7 @@ def test_rafale_prise_automatique(adresse):
     assert not erreurs, erreurs
     assert "change de tirage" in statut or "Pose" in statut or "Prise" in statut
     assert max(taille[:2]) >= 1000 and taille[2]
+    assert flashs >= 1, "pas de flash à la prise automatique"
 
 
 def test_page_d_album_quatre_tirages(adresse):

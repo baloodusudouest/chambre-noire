@@ -39,6 +39,7 @@ export class Camera {
     this.reinit()
     this.section = null
     this.prises = 0
+    this.surPrise = null   // appelé au moment exact de la prise (flash à l'écran), automatique ou déclencheur
   }
 
   reinit() {
@@ -145,6 +146,7 @@ export class Camera {
     const v = this.video
     const image = newCanvas(v.videoWidth, v.videoHeight)
     image.getContext('2d').drawImage(v, 0, 0, image.width, image.height)
+    try { this.surPrise?.(quads.length) } catch { /* l'affichage ne doit jamais bloquer la prise */ }
     this.arme = false; this.derniere = quads; this.stableDepuis = 0; this.manque = 0
     try {
       if (this.mode !== 'rafale' || !this.section) this.section = nouvelId()   // 1 photo et Page : une section par prise
