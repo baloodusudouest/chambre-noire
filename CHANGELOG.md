@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 0.5.0 — 15 novembre 2026
+- **Millésime suit les noms réglés ici.** Nouvelle adresse `GET /externe/noms` (jeton `CHAMBRE_NOIRE_JETON_MILLESIME`, vide : fermée, comparaison en temps constant) : libellé, album et tag des non datées. Millésime ≥ 2.9.0 la lit à chaque relecture d'Immich : le libellé ne se règle plus qu'à un endroit, Réglages › Noms dans Immich. Rien d'autre n'est donné (ni photo, ni journal).
+- **Connexion : tuile Millésime** (adresse ouverte ou fermée, dernière lecture).
+- Tests : adresse fermée sans jeton, jeton refusé, noms suivis après un changement dans Réglages, libellé absent. 41 tests.
+
 ## 0.4.1 — 15 novembre 2026
 - **Réglages › Noms dans Immich** : le libellé des albums et des tags, et l'album des non datées, se règlent dans l'appli (gardés dans la base, `PUT /api/reglages`), avec un exemple des noms produits. Utilisés dès le prochain envoi ; rien n'est renommé dans Immich. Demandé par Julien.
 - `CHAMBRE_NOIRE_LIBELLE` et `CHAMBRE_NOIRE_ALBUM_NON_DATEES` deviennent facultatives : valeur de départ seulement.
