@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 0.4.0 — 15 novembre 2026
+Revue, date et envoi dans Immich (étape 4 du plan).
+- **Revue** d'une section dans « À traiter » : vignettes, ↺ ↻ pour tourner (quart de tour), ✕ pour retirer.
+- **Date** : mois (ou « Mois inconnu ») et année, ou « Photos non datées » ; aperçu de l'album et du tag avant l'envoi.
+- **Envoi** (en arrière-plan, progression affichée) : rotation écrite dans les pixels, date et tag dans le JPEG (EXIF + XMP, portage exact de Scan Immich : `app/metadonnees.py`), envoi, album « AAAA-MM <libellé> », tag « <libellé>/AAAA-MM », description = nom de l'album, lancement du rangement (`/api/jobs`, puis `/api/queues`). Non datées : 1er janvier 1900 en UTC (+00:00), album et tag que lit Millésime. Heure : celle de la séance dans la journée, +1 s par photo.
+- **Incomplet** : une étape ratée (album, tag, description, rangement) ou une photo refusée laisse la section « incomplète » ; Relancer garde la date et ne renvoie jamais une photo déjà envoyée.
+- **Journal des envois** (Réglages) avec **Annuler** : retire de l'album et du tag puis met à la corbeille d'Immich les seules photos de cet envoi ; les prises reviennent « à dater ».
+- Nouvelle variable : `CHAMBRE_NOIRE_LIBELLE` (obligatoire pour envoyer), `CHAMBRE_NOIRE_ALBUM_NON_DATEES` (facultative). Pillow ajouté (rotation).
+- Tests : 10 tests d'envoi contre un faux Immich (EXIF de mai 1987 en +02:00, non datées en +00:00, année seule, tag raté puis relance sans renvoi, ancienne adresse du rangement, Annuler limité au journal, lecture seule, libellé absent, date invalide) ; parcours complet en caméra simulée jusqu'à Annuler. 38 tests en tout. Jamais essayé contre le vrai Immich : noms des routes d'écriture et de la corbeille à confirmer.
+
 ## 0.3.1 — 15 novembre 2026
 - Flash blanc à l'écran au moment exact de chaque prise, automatique ou au déclencheur (avant, seulement au déclencheur). Demandé par Julien après le premier essai sur l'iPhone, où la détection fonctionne.
 - Test : la rafale simulée vérifie qu'un flash a lieu.

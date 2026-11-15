@@ -14,6 +14,9 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
 - **0.3.0** : caméra et détection (code de Scan Immich repris tel quel), trois modes, prises envoyées au NAS.
   28 tests verts (dont caméra simulée). Essayée sur l'iPhone (HTTPS :8445 par tailscale serve) : détection OK.
 - **0.3.1** : flash à l'écran à chaque prise.
+- **0.4.0** : revue (rotation, retrait), date, envoi dans Immich (EXIF/XMP, album, tag, description, rangement),
+  journal + Annuler. 38 tests verts. Jamais essayé contre le vrai Immich : faire un premier envoi en lecture
+  seule coupée, sur 2 photos, et vérifier album, tag, date, description, rangement ; puis essayer Annuler.
 - Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :
   à ajouter à la sauvegarde (avis du conseil) ou à vider souvent en envoyant.
 
@@ -21,7 +24,7 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
 1. ~~Squelette~~ (fait, vérifié sur le NAS).
 2. ~~Zone d'attente~~ (0.2.0).
 3. ~~Caméra et détection~~ (0.3.0). Reste : banc d'images réelles des fonds difficiles (tests/images).
-4. Envoi : EXIF/XMP, album, tag, description (nom d'album), rangement ; journal + Annuler limité au journal.
+4. ~~Envoi~~ (0.4.0).
 5. Orientation sur le NAS (ML d'Immich).
 6. Bascule : rafales de Scan Immich envoyées, remplacement direct de l'adresse HTTPS (choix de Julien).
 
@@ -32,6 +35,9 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
   non datées gardent l'album et le tag que lit Millésime.
 
 ## Pièges
+- Une photo renvoyée après Annuler avec une autre date est une nouvelle photo (autre date dans le fichier) ;
+  l'ancienne reste dans la corbeille d'Immich. Même date : Immich répond « duplicate », l'appli la restaure.
+- `exiger_ecriture` répond 409 (pas 403) en lecture seule.
 - Les tests de caméra baissent les seuils de définition (`window.__reglagesCamera`, seulement avec `?essai`) :
   les caméras simulées font 1440 px. Ne pas baisser `REGLAGES.minPx` dans le code.
 - `wait_for_function` de Playwright n'attend pas une promesse : interroger le NAS en Python (`_attendre`).

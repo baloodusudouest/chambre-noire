@@ -13,14 +13,14 @@ from tests.faux_immich import FauxImmich
 MDP = "mot-de-passe-de-test"
 
 
-def client(tmp_path, faux=None, lecture_seule=False, cle="cle-de-test"):
+def client(tmp_path, faux=None, lecture_seule=False, cle="cle-de-test", libelle="Numérisation Essai"):
     from app import main
     importlib.reload(main)
     faux = faux or FauxImmich()
     main.ETAT.clear()
     main.ETAT["cfg"] = config_mod.Config(password=MDP, data=tmp_path, static=tmp_path / "static",
                                          immich_url="http://immich", immich_cle=cle, ml_url="http://ml",
-                                         attente_connexion=False, lecture_seule=lecture_seule)
+                                         attente_connexion=False, lecture_seule=lecture_seule, libelle=libelle)
     main.ETAT["transport"] = httpx.MockTransport(faux)
     return TestClient(main.app), faux
 

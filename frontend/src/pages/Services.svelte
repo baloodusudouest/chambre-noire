@@ -24,7 +24,7 @@
   onMount(lire)
 
   const voyant = (ok, avertissement) => (ok ? (avertissement ? 'bg-amber-400' : 'bg-valide') : s ? 'bg-destructive' : 'bg-muted-foreground/40')
-  let immichAvert = $derived(!!s && (s.immich.manquantes.length > 0 || !s.immich.permissions_lues))
+  let immichAvert = $derived(!!s && (s.immich.manquantes.length > 0 || !s.immich.permissions_lues || !s.libelle))
   const basculer = (nom) => (choisi = choisi === nom ? null : nom)
 </script>
 
@@ -60,8 +60,9 @@
   <section class="mt-4 rounded-2xl border bg-card p-5" aria-label="Immich">
     <h2 class="text-lg font-semibold">Immich {s.immich.version}</h2>
     <dl class="mt-2 grid gap-x-4 gap-y-1 text-sm md:grid-cols-[8rem_1fr]">
-      <dt class="text-muted-foreground">Lit</dt><dd>la version, la clé et ses permissions ; plus tard les albums et les tags</dd>
-      <dt class="text-muted-foreground">Écrit</dt><dd>rien en 0.1.0 ; à l’étape 4 : les photos, l’album du mois, le tag, la description, le rangement</dd>
+      <dt class="text-muted-foreground">Lit</dt><dd>la version, la clé et ses permissions, les albums</dd>
+      <dt class="text-muted-foreground">Écrit</dt><dd>les photos datées, l’album du mois, le tag, la description (nom de l’album), le lancement du rangement ; Annuler : retrait et corbeille</dd>
+      <dt class="text-muted-foreground">Libellé</dt><dd>{s.libelle ? `« ${s.libelle} »` : 'absent : CHAMBRE_NOIRE_LIBELLE dans la stack'}</dd>
       {#if s.immich.cle_nom}<dt class="text-muted-foreground">Clé</dt><dd>« {s.immich.cle_nom} »</dd>{/if}
     </dl>
     {#if s.immich.erreur}<p class="mt-3 text-sm text-destructive" role="alert">{s.immich.erreur}</p>{/if}

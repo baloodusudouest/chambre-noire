@@ -3,7 +3,8 @@
 0.1.0 (squelette) : /health (publique, sans aucun nom), /api/session, /api/connexion, /api/deconnexion,
 /api/services (état d'Immich, permissions de la clé, service d'apprentissage), puis l'interface.
 0.2.0 (zone d'attente) : /api/prises (réception idempotente), /api/sections, images des prises.
-Rien n'est encore écrit dans Immich.
+0.4.0 (envoi) : rotation d'une prise, /api/sections/{id}/envoyer (date, tag, album, description, rangement),
+/api/journal et Annuler (limité aux photos du journal). Seules routes qui écrivent dans Immich.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from . import __version__
 from .attente import Attente, ErreurPrise
 from .auth import COMMUN, DUREE, Sessions
 from .config import APPLI, Config, charger
+from .envoi import Envoyeur, ErreurEnvoi, ImmichEcriture
 from .immich import ApprentissageImmich, Immich
 
 ETAT: dict = {}
@@ -45,6 +47,8 @@ async def cycle(app: FastAPI):
     ETAT.update(cfg=cfg, sessions=Sessions(APPLI, cfg.password, _lire_generation(cfg)),
                 immich=Immich(cfg.immich_url, cfg.immich_cle, transport), attente=Attente(cfg.data),
                 apprentissage=ApprentissageImmich(cfg.ml_url, transport))
+    ETAT["envoyeur"] = Envoyeur(ETAT["attente"], ImmichEcriture(cfg.immich_url, cfg.immich_cle, transport),
+                                cfg.libelle, cfg.album_non_datees)
     yield
 
 
@@ -88,7 +92,7 @@ def sante():
     # Pour la tuile de l'Anneau : des nombres, jamais de nom. Prises en attente et photos envoyées
     # arrivent avec la zone d'attente (étape 2) et l'envoi (étape 4).
     return {"ok": True, "appli": APPLI, "version": __version__,
-            "en_attente": ETAT["attente"].en_attente(), "envoyees": 0}
+            "en_attente": ETAT["attente"].en_attente(), "envoyees": ETAT["attente"].envoyees()}
 
 
 # ================================================================ connexion
@@ -96,8 +100,11 @@ def sante():
 @app.get("/api/session")
 def session(request: Request):
     s = ETAT["sessions"]
-    return {"connecte": s.connecte(request.cookies), "version": __version__,
-            "lecture_seule": ETAT["cfg"].lecture_seule}
+    connecte = s.connecte(request.cookies)
+    sortie = {"connecte": connecte, "version": __version__, "lecture_seule": ETAT["cfg"].lecture_seule}
+    if connecte:   # le libellé (nom d'album et de tag) n'est donné qu'une fois connecté
+        sortie.update(libelle=ETAT["cfg"].libelle, album_non_datees=ETAT["cfg"].album_non_datees)
+    return sortie
 
 
 @app.post("/api/connexion")
@@ -132,7 +139,7 @@ def deconnexion():
 def services():
     """Lit l'état d'Immich (version, clé, permissions) et du service d'apprentissage. N'écrit rien."""
     return {"immich": asdict(ETAT["immich"].etat()), "apprentissage": ETAT["apprentissage"].etat(),
-            "lecture_seule": ETAT["cfg"].lecture_seule}
+            "lecture_seule": ETAT["cfg"].lecture_seule, "libelle": ETAT["cfg"].libelle}
 
 
 # ================================================================ zone d'attente (étape 2)
@@ -166,6 +173,41 @@ def image_de_prise(pid: str, quoi: str):
     if not chemin:
         raise HTTPException(404, "Prise introuvable.")
     return FileResponse(chemin, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@app.patch("/api/prises/{pid}")
+def modifier_prise(pid: str, corps: dict = Body(...)):
+    """Rotation à la main à la revue (quarts de tour, sens horaire). N'écrit rien dans Immich."""
+    if "rotation" not in corps or not ETAT["attente"].tourner(pid, int(corps["rotation"])):
+        raise HTTPException(404, "Prise introuvable ou déjà envoyée.")
+    return {"ok": True}
+
+
+@app.post("/api/sections/{sid}/envoyer", status_code=202)
+def envoyer_section(sid: str, corps: dict = Body(default={})):
+    """Date la section et l'envoie dans Immich (en arrière-plan ; l'état se lit dans /api/sections).
+    Une section « incomplète » est relancée avec sa date : les photos déjà envoyées ne repartent pas."""
+    exiger_ecriture("Immich")
+    try:
+        ETAT["envoyeur"].lancer(sid, int(corps.get("annee") or 0), int(corps.get("mois") or 0), bool(corps.get("non_datee")))
+    except ErreurEnvoi as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True}
+
+
+@app.get("/api/journal")
+def journal():
+    return {"journal": ETAT["attente"].journal()}
+
+
+@app.post("/api/journal/{jid}/annuler")
+def annuler_envoi(jid: int):
+    """Retire de l'album et du tag, puis met à la corbeille d'Immich (30 jours), les seules photos de cet envoi."""
+    exiger_ecriture("Immich")
+    try:
+        return ETAT["envoyeur"].annuler(jid)
+    except ErreurEnvoi as e:
+        raise HTTPException(409, str(e))
 
 
 @app.delete("/api/prises/{pid}")

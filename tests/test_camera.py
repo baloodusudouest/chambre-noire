@@ -66,8 +66,24 @@ def test_rafale_prise_automatique(adresse):
             const img = new Image(); img.src = '/api/prises/' + p.id + '/rendu.jpg'; await img.decode();
             return [img.naturalWidth, img.naturalHeight, p.taille_source > 0];
         }""")
+        # étape 4 : revue, rotation, date, envoi, puis Annuler depuis le journal
+        page.locator("button", has_text="Rafale du").first.click()
+        page.wait_for_selector("text=à dater")
+        page.get_by_label("Tourner à droite").first.click()
+        page.select_option("select[aria-label=Mois]", "5")
+        page.fill("input[aria-label=Année]", "1987")
+        page.wait_for_selector("text=1987-05 Numérisation Démo")
+        page.click("text=Dater et envoyer")
+        page.wait_for_selector("text=Rien à traiter", timeout=30000)
+        page.goto(adresse + "/?essai#/reglages")
+        page.wait_for_selector("text=1987-05 Numérisation Démo")
+        page.click("text=Annuler l’envoi")
+        page.click("text=Confirmer")
+        page.wait_for_selector("text=à la corbeille d’Immich. Elles", timeout=15000)
+        large = page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")
         b.close()
     assert not erreurs, erreurs
+    assert not large
     assert "change de tirage" in statut or "Pose" in statut or "Prise" in statut
     assert max(taille[:2]) >= 1000 and taille[2]
     assert flashs >= 1, "pas de flash à la prise automatique"

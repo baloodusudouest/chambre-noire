@@ -1,6 +1,6 @@
 <script>
-  // « À traiter » : des tuiles avec un nombre. 0.2.0 : prises encore sur l'iPhone (pas reçues par le NAS),
-  // prises refusées par le NAS, et sections reçues qui attendent leur date (l'envoi dans Immich arrive à l'étape 4).
+  // « À traiter » : des tuiles avec un nombre — prises encore sur l'iPhone, refusées par le NAS, sections à dater,
+  // envois en cours ou incomplets. Une section ouverte montre sa revue (Section.svelte).
   import { onMount, onDestroy } from 'svelte'
   import Smartphone from '@lucide/svelte/icons/smartphone'
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert'
@@ -8,13 +8,14 @@
   import { api } from '$lib/api.js'
   import { abonner, pousser, refusees, abandonner } from '$lib/fileEnvoi.js'
   import { Button } from '$lib/components/ui/button/index.js'
+  import Section from './Section.svelte'
 
-  let { ondeconnecte } = $props()
+  let { ondeconnecte, session } = $props()
   let file = $state({ surIphone: 0, refusees: 0, envoi: false, erreur: '' })
   let sections = $state(null)
   let choisi = $state(null)
-  let prises = $state([])
   let rejetees = $state([])
+  let minuterie = 0
   let message = $state('')
 
   const nomMode = { rafale: 'Rafale', photo: '1 photo', page: 'Page d’album' }
@@ -23,22 +24,21 @@
   async function lire() {
     try { sections = (await api.get('/api/sections')).sections }
     catch (err) { if (err.statut === 401) ondeconnecte?.(); else message = err.message }
+    // un envoi en cours : on relit chaque seconde pour suivre la progression
+    clearTimeout(minuterie)
+    if (sections?.some((s) => s.statut === 'envoi')) minuterie = setTimeout(lire, 1000)
   }
   async function ouvrir(nom, section = null) {
     if (choisi === nom + (section?.id ?? '')) { choisi = null; return }
     choisi = nom + (section?.id ?? '')
-    if (section) prises = (await api.get(`/api/sections/${section.id}/prises`)).prises
     if (nom === 'refusees') rejetees = await refusees()
   }
-  async function retirer(id) {
-    try { await api.del(`/api/prises/${id}`); prises = prises.filter((p) => p.id !== id); lire() }
-    catch (err) { message = err.message }
-  }
+  const sectionChoisie = $derived(sections?.find((s) => choisi === 'section' + s.id))
   async function oublier(id) { await abandonner(id); rejetees = await refusees() }
 
   let fin
   onMount(() => { lire(); fin = abonner((e) => { const recues = e.surIphone < file.surIphone; file = e; if (recues) lire() }) })
-  onDestroy(() => fin?.())
+  onDestroy(() => { fin?.(); clearTimeout(minuterie) })
 </script>
 
 <header class="mb-5">
@@ -64,9 +64,10 @@
   {#each sections ?? [] as s (s.id)}
     <button type="button" role="listitem" aria-pressed={choisi === 'section' + s.id} onclick={() => ouvrir('section', s)}
             class="flex min-h-28 flex-col gap-1 rounded-2xl border bg-card p-4 text-left transition-colors hover:border-primary aria-pressed:border-primary">
-      <CalendarClock class="size-6 text-primary" aria-hidden="true" />
-      <span class="text-3xl font-light tabular-nums">{s.prises}</span>
-      <span class="text-sm text-muted-foreground">{nomMode[s.mode]} du {date(s.creee_le)}, à dater</span>
+      <CalendarClock class="size-6 {s.statut === 'incomplete' ? 'text-destructive' : 'text-primary'}" aria-hidden="true" />
+      <span class="text-3xl font-light tabular-nums">{s.statut === 'incomplete' || s.statut === 'envoi' ? s.envoyees + s.prises : s.prises}</span>
+      <span class="text-sm text-muted-foreground">{nomMode[s.mode]} du {date(s.creee_le)},
+        {s.statut === 'envoi' ? 'envoi en cours' : s.statut === 'incomplete' ? 'envoi incomplet' : 'à dater'}</span>
     </button>
   {/each}
 </div>
@@ -96,20 +97,8 @@
       {/each}
     </ul>
   </section>
-{:else if choisi?.startsWith('section')}
-  <section class="mt-4 rounded-2xl border bg-card p-5" aria-label="Prises de la section">
-    <h2 class="text-lg font-semibold">En sécurité sur le NAS</h2>
-    <p class="mt-1 text-sm text-muted-foreground">La date et l’envoi dans Immich arrivent à l’étape 4. Une prise ratée peut être retirée.</p>
-    <ul class="mt-3 grid grid-cols-3 gap-2 md:grid-cols-6">
-      {#each prises as p (p.id)}
-        <li class="relative">
-          <img src={`/api/prises/${p.id}/rendu.jpg`} alt="Prise" loading="lazy" class="aspect-square w-full rounded-lg object-cover" />
-          <button type="button" class="absolute top-1 right-1 rounded-full bg-background/80 px-2 text-xs" onclick={() => retirer(p.id)}
-                  aria-label="Retirer cette prise">✕</button>
-        </li>
-      {/each}
-    </ul>
-  </section>
+{:else if sectionChoisie}
+  <Section section={sectionChoisie} {session} onchange={lire} />
 {:else if sections && !sections.length && !file.surIphone}
   <p class="mt-4 text-sm text-muted-foreground">Rien à traiter.</p>
 {/if}

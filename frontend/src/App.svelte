@@ -23,7 +23,7 @@
   ]
 
   let connecte = $state(null) // null : on ne sait pas encore
-  let session = $state({ version: '', lecture_seule: false })
+  let session = $state({ version: '', lecture_seule: false, libelle: '', album_non_datees: '' })
   let page = $state(lirePage())
   let file = $state({ surIphone: 0, connexion: false })
   abonner((e) => { file = e; if (e.connexion && connecte) connecte = false })
@@ -94,7 +94,7 @@
       {#key page}
         <div in:fly={{ y: 6, duration: 180 }}>
           {#if page === 'a-traiter'}
-            <ATraiter ondeconnecte={() => (connecte = false)} />
+            <ATraiter ondeconnecte={() => (connecte = false)} {session} />
           {:else if page === 'connexion'}
             <Services ondeconnecte={() => (connecte = false)} />
           {:else if page === 'reglages'}

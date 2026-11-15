@@ -24,6 +24,8 @@ class Config:
     ml_url: str = "http://immich_machine_learning:3003"
     attente_connexion: bool = True   # délai anti-essais ; coupé dans les tests
     lecture_seule: bool = False      # l'appli lit tout mais n'écrit rien dans Immich
+    libelle: str = ""                # « Numérisation X » : album « AAAA-MM <libellé> », tag « <libellé>/AAAA-MM »
+    album_non_datees: str = ""       # vide : « Non datées <libellé> » (doit rester celui que lit Millésime)
 
 
 def charger() -> Config:
@@ -39,4 +41,6 @@ def charger() -> Config:
         immich_cle=_env("IMMICH_CLE"),
         ml_url=_env("ML_URL", "http://immich_machine_learning:3003").rstrip("/"),
         lecture_seule=_env("LECTURE_SEULE").lower() in ("oui", "1", "true", "yes"),
+        libelle=_env("LIBELLE"),
+        album_non_datees=_env("ALBUM_NON_DATEES"),
     )

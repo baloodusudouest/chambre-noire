@@ -20,7 +20,7 @@ perms = [p for p in TOUTES if p != "queue.update"] if os.environ.get("DEMO_PERMI
 main.ETAT["cfg"] = config_mod.Config(password="demonstration-12", data=Path(tempfile.mkdtemp()),
                                      static=Path(main.__file__).parent / "static",
                                      immich_url="http://immich", immich_cle="cle-de-test", ml_url="http://ml",
-                                     attente_connexion=False)
+                                     attente_connexion=False, libelle="Numérisation Démo")
 main.ETAT["transport"] = httpx.MockTransport(FauxImmich(permissions=perms))
 
 if __name__ == "__main__":
