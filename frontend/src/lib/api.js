@@ -24,4 +24,5 @@ export const api = {
   post: (chemin, corps) => appel('POST', chemin, corps ?? {}),
   del: (chemin) => appel('DELETE', chemin),
   patch: (chemin, corps) => appel('PATCH', chemin, corps ?? {}),
+  put: (chemin, corps) => appel('PUT', chemin, corps ?? {}),
 }

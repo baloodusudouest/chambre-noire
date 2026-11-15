@@ -12,8 +12,10 @@ services:
       - CHAMBRE_NOIRE_IMMICH_URL=http://immich_server:2283
       - CHAMBRE_NOIRE_IMMICH_CLE=${CHAMBRE_NOIRE_IMMICH_CLE}       # clé d'API Immich dédiée
       - CHAMBRE_NOIRE_ML_URL=http://immich_machine_learning:3003
-      - CHAMBRE_NOIRE_LIBELLE=${CHAMBRE_NOIRE_LIBELLE}             # album « AAAA-MM <libellé> », tag « <libellé>/AAAA-MM »
-      - CHAMBRE_NOIRE_ALBUM_NON_DATEES=${CHAMBRE_NOIRE_ALBUM_NON_DATEES:-}   # vide : « Non datées <libellé> »
+      # 0.4.1 : libellé et album des non datées se règlent dans l'appli (Réglages › Noms dans Immich) ;
+      # ces deux variables ne donnent que la valeur de départ (facultatives).
+      - CHAMBRE_NOIRE_LIBELLE=${CHAMBRE_NOIRE_LIBELLE:-}
+      - CHAMBRE_NOIRE_ALBUM_NON_DATEES=${CHAMBRE_NOIRE_ALBUM_NON_DATEES:-}
       - CHAMBRE_NOIRE_LECTURE_SEULE=${CHAMBRE_NOIRE_LECTURE_SEULE:-}   # « oui » : rien n'est écrit dans Immich
     ports:
       - "${PORT_CHAMBRE_NOIRE:-8100}:8100"         # réseau local ; caméra par HTTPS (tailscale serve)

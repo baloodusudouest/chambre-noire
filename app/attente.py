@@ -45,6 +45,7 @@ class Attente:
                 coins TEXT, rotation INTEGER NOT NULL DEFAULT 0, filtre TEXT, intensite INTEGER,
                 taille_rendu INTEGER NOT NULL, taille_source INTEGER NOT NULL DEFAULT 0,
                 statut TEXT NOT NULL DEFAULT 'attente');
+            CREATE TABLE IF NOT EXISTS reglage (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS journal (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, quand TEXT NOT NULL, section_id TEXT NOT NULL,
                 action TEXT NOT NULL, details TEXT NOT NULL, annule_le TEXT);
@@ -157,6 +158,17 @@ class Attente:
 
     def envoyees(self) -> int:
         return self._db.execute("SELECT COUNT(*) FROM prise WHERE statut='envoyee'").fetchone()[0]
+
+    # ------------------------------------------------------------------ réglages (écran Réglages)
+    def reglage(self, cle: str) -> str | None:
+        l = self._db.execute("SELECT valeur FROM reglage WHERE cle=?", (cle,)).fetchone()
+        return l["valeur"] if l else None
+
+    def regler(self, cle: str, valeur: str) -> None:
+        with self._verrou:
+            self._db.execute("INSERT INTO reglage(cle, valeur) VALUES (?,?) ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur",
+                             (cle, valeur))
+            self._db.commit()
 
     # ------------------------------------------------------------------ journal des écritures
     def noter(self, sid: str, action: str, details: dict) -> int:

@@ -62,7 +62,7 @@
     <dl class="mt-2 grid gap-x-4 gap-y-1 text-sm md:grid-cols-[8rem_1fr]">
       <dt class="text-muted-foreground">Lit</dt><dd>la version, la clé et ses permissions, les albums</dd>
       <dt class="text-muted-foreground">Écrit</dt><dd>les photos datées, l’album du mois, le tag, la description (nom de l’album), le lancement du rangement ; Annuler : retrait et corbeille</dd>
-      <dt class="text-muted-foreground">Libellé</dt><dd>{s.libelle ? `« ${s.libelle} »` : 'absent : CHAMBRE_NOIRE_LIBELLE dans la stack'}</dd>
+      <dt class="text-muted-foreground">Libellé</dt><dd>{s.libelle ? `« ${s.libelle} »` : 'absent : à régler dans Réglages › Noms dans Immich'}</dd>
       {#if s.immich.cle_nom}<dt class="text-muted-foreground">Clé</dt><dd>« {s.immich.cle_nom} »</dd>{/if}
     </dl>
     {#if s.immich.erreur}<p class="mt-3 text-sm text-destructive" role="alert">{s.immich.erreur}</p>{/if}

@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 0.4.1 — 15 novembre 2026
+- **Réglages › Noms dans Immich** : le libellé des albums et des tags, et l'album des non datées, se règlent dans l'appli (gardés dans la base, `PUT /api/reglages`), avec un exemple des noms produits. Utilisés dès le prochain envoi ; rien n'est renommé dans Immich. Demandé par Julien.
+- `CHAMBRE_NOIRE_LIBELLE` et `CHAMBRE_NOIRE_ALBUM_NON_DATEES` deviennent facultatives : valeur de départ seulement.
+- Le libellé refuse « / » (séparateur des niveaux du tag).
+- Tests : libellé réglé puis utilisé à l'envoi, gardé après redémarrage ; écran Réglages (PC, iPhone). 40 tests.
+
 ## 0.4.0 — 15 novembre 2026
 Revue, date et envoi dans Immich (étape 4 du plan).
 - **Revue** d'une section dans « À traiter » : vignettes, ↺ ↻ pour tourner (quart de tour), ✕ pour retirer.

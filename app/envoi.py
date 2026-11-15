@@ -122,14 +122,16 @@ class ImmichEcriture:
 class Envoyeur:
     """Envoie une section à la fois, dans un fil à part ; l'état se lit dans la section (statut, progression)."""
 
-    def __init__(self, attente: Attente, immich: ImmichEcriture, libelle: str, album_non_datees: str = ""):
-        self.attente, self.immich, self.libelle, self.album_non_datees = attente, immich, libelle, album_non_datees
+    def __init__(self, attente: Attente, immich: ImmichEcriture, noms_actuels):
+        """noms_actuels() → (libellé, album des non datées) : lus au moment de chaque envoi (écran Réglages)."""
+        self.attente, self.immich, self.noms_actuels = attente, immich, noms_actuels
         self._verrou = threading.Lock()
         self._fils: dict[str, threading.Thread] = {}
 
     def lancer(self, sid: str, annee: int, mois: int, non_datee: bool, attendre: bool = False) -> None:
-        if not self.libelle:
-            raise ErreurEnvoi("CHAMBRE_NOIRE_LIBELLE est vide dans la stack : noms d'album et de tag inconnus.")
+        libelle, album_non_datees = self.noms_actuels()
+        if not libelle:
+            raise ErreurEnvoi("Libellé des albums et des tags absent : à régler dans Réglages › Noms dans Immich.")
         s = self.attente.section(sid)
         if not s:
             raise ErreurEnvoi("Section introuvable.")
@@ -139,7 +141,7 @@ class Envoyeur:
             annee, mois, non_datee = s["annee"], s["mois"] or 0, bool(s["non_datee"])
         elif not non_datee and not (1850 <= int(annee) <= datetime.now().year and 0 <= int(mois) <= 12):
             raise ErreurEnvoi("Date invalide.")
-        album, tag = noms(self.libelle, int(annee or 1900), int(mois or 0), bool(non_datee), self.album_non_datees)
+        album, tag = noms(libelle, int(annee or 1900), int(mois or 0), bool(non_datee), album_non_datees)
         self.attente.maj_section(sid, statut="envoi", annee=annee, mois=mois, non_datee=int(bool(non_datee)),
                                  album=album, tag=tag, erreur=None, progression="Préparation…")
         fil = threading.Thread(target=self._envoyer, args=(sid,), daemon=True)

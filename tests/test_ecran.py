@@ -47,6 +47,10 @@ def test_parcours(adresse, taille):
         page.get_by_role("list", name="Services").get_by_text("Immich", exact=True).click()
         page.wait_for_selector("text=queue.update ou job.create")
         page.goto(adresse + "/#/reglages")
+        page.fill("input[placeholder='Numérisation …']", f"Numérisation Écran {taille[0]}")
+        page.click("text=Enregistrer")
+        page.wait_for_selector("text=utilisé dès le prochain envoi")
+        page.wait_for_selector(f"text=Numérisation Écran {taille[0]}/1987-05")
         from app import __version__
         page.wait_for_selector(f"text=Chambre noire {__version__}")
         large = page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")

@@ -20,7 +20,7 @@ def jpeg(couleur="red", taille=(60, 40)):
 
 def remplir(c, n=3, section="section-01"):
     for i, coul in zip(range(n), ["red", "green", "blue", "yellow", "white"]):
-        assert envoyer(c, pid=f"prise-000{i}", section=section, rendu=jpeg(coul), ordre=i,
+        assert envoyer(c, pid=(f"prise-000{i}" if section == "section-01" else f"{section}-p{i}"), section=section, rendu=jpeg(coul), ordre=i,
                        prise_le="2026-11-15T20:30:00+01:00").status_code == 201
 
 
@@ -169,7 +169,7 @@ def test_sans_libelle_refuse(tmp_path):
         connecter(c)
         remplir(c, 1)
         r = c.post("/api/sections/section-01/envoyer", json={"annee": 1990})
-        assert r.status_code == 409 and "CHAMBRE_NOIRE_LIBELLE" in r.json()["detail"]
+        assert r.status_code == 409 and "Réglages" in r.json()["detail"]
     assert faux.ecritures == []
 
 
@@ -187,3 +187,37 @@ def test_metadonnees_identiques_a_scan_immich():
     out = injecter(jpeg(), d, "Num/1987-05")
     ex, _ = exif(out)
     assert ex[0x9003] == "1987:05:01 12:00:03" and ex[0x9010] == "+02:00"
+
+
+def test_libelle_regle_dans_l_appli(tmp_path):
+    """0.4.1 : le libellé vient de Réglages ; la stack ne donne que la valeur de départ."""
+    faux = FauxImmich()
+    c, _ = client(tmp_path, faux, libelle="")
+    with c:
+        connecter(c)
+        assert c.get("/api/reglages").json() == {"libelle": "", "album_non_datees": ""}
+        assert c.put("/api/reglages", json={"libelle": "Avec/barre"}).status_code == 422
+        assert c.put("/api/reglages", json={"libelle": ""}).status_code == 422
+        r = c.put("/api/reglages", json={"libelle": "Numérisation Réglée", "album_non_datees": "Sans date"})
+        assert r.status_code == 200
+        assert c.get("/api/session").json()["libelle"] == "Numérisation Réglée"
+        remplir(c, 2)
+        c.post("/api/sections/section-01/envoyer", json={"annee": 1991, "mois": 2})
+        attendre_fin(c)
+        remplir(c, 1, section="section-02")
+        c.post("/api/sections/section-02/envoyer", json={"non_datee": True})
+        attendre_fin(c, "section-02")
+    assert sorted(a["albumName"] for a in faux.albums.values()) == ["1991-02 Numérisation Réglée", "Sans date"]
+    assert sorted(t["value"] for t in faux.tags.values()) == ["Numérisation Réglée/1991-02", "Numérisation Réglée/Non datée"]
+
+
+def test_reglage_garde_apres_redemarrage(tmp_path):
+    c, _ = client(tmp_path, libelle="Valeur de la stack")
+    with c:
+        connecter(c)
+        assert c.get("/api/reglages").json()["libelle"] == "Valeur de la stack"
+        c.put("/api/reglages", json={"libelle": "Valeur de l'appli"})
+    c2, _ = client(tmp_path, libelle="Valeur de la stack")
+    with c2:
+        connecter(c2)
+        assert c2.get("/api/reglages").json()["libelle"] == "Valeur de l'appli"

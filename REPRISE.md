@@ -17,6 +17,7 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
 - **0.4.0** : revue (rotation, retrait), date, envoi dans Immich (EXIF/XMP, album, tag, description, rangement),
   journal + Annuler. 38 tests verts. Jamais essayé contre le vrai Immich : faire un premier envoi en lecture
   seule coupée, sur 2 photos, et vérifier album, tag, date, description, rangement ; puis essayer Annuler.
+- **0.4.1** : libellé et album des non datées réglés dans l'appli (Réglages), la stack ne donne que le départ.
 - Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :
   à ajouter à la sauvegarde (avis du conseil) ou à vider souvent en envoyant.
 

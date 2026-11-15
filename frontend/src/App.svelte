@@ -98,7 +98,7 @@
           {:else if page === 'connexion'}
             <Services ondeconnecte={() => (connecte = false)} />
           {:else if page === 'reglages'}
-            <Reglages {session} {deconnecter} />
+            <Reglages {session} {deconnecter} relire={verifier} />
           {:else}
             <Scanner />
           {/if}

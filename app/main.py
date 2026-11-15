@@ -47,8 +47,7 @@ async def cycle(app: FastAPI):
     ETAT.update(cfg=cfg, sessions=Sessions(APPLI, cfg.password, _lire_generation(cfg)),
                 immich=Immich(cfg.immich_url, cfg.immich_cle, transport), attente=Attente(cfg.data),
                 apprentissage=ApprentissageImmich(cfg.ml_url, transport))
-    ETAT["envoyeur"] = Envoyeur(ETAT["attente"], ImmichEcriture(cfg.immich_url, cfg.immich_cle, transport),
-                                cfg.libelle, cfg.album_non_datees)
+    ETAT["envoyeur"] = Envoyeur(ETAT["attente"], ImmichEcriture(cfg.immich_url, cfg.immich_cle, transport), noms_actuels)
     yield
 
 
@@ -97,13 +96,22 @@ def sante():
 
 # ================================================================ connexion
 
+def noms_actuels() -> tuple[str, str]:
+    """Libellé et album des non datées : réglés dans l'appli, sinon valeur de départ de la stack."""
+    a, c = ETAT["attente"], ETAT["cfg"]
+    libelle = a.reglage("libelle")
+    nd = a.reglage("album_non_datees")
+    return (c.libelle if libelle is None else libelle), (c.album_non_datees if nd is None else nd)
+
+
 @app.get("/api/session")
 def session(request: Request):
     s = ETAT["sessions"]
     connecte = s.connecte(request.cookies)
     sortie = {"connecte": connecte, "version": __version__, "lecture_seule": ETAT["cfg"].lecture_seule}
     if connecte:   # le libellé (nom d'album et de tag) n'est donné qu'une fois connecté
-        sortie.update(libelle=ETAT["cfg"].libelle, album_non_datees=ETAT["cfg"].album_non_datees)
+        libelle, nd = noms_actuels()
+        sortie.update(libelle=libelle, album_non_datees=nd)
     return sortie
 
 
@@ -139,7 +147,7 @@ def deconnexion():
 def services():
     """Lit l'état d'Immich (version, clé, permissions) et du service d'apprentissage. N'écrit rien."""
     return {"immich": asdict(ETAT["immich"].etat()), "apprentissage": ETAT["apprentissage"].etat(),
-            "lecture_seule": ETAT["cfg"].lecture_seule, "libelle": ETAT["cfg"].libelle}
+            "lecture_seule": ETAT["cfg"].lecture_seule, "libelle": noms_actuels()[0]}
 
 
 # ================================================================ zone d'attente (étape 2)
@@ -193,6 +201,26 @@ def envoyer_section(sid: str, corps: dict = Body(default={})):
     except ErreurEnvoi as e:
         raise HTTPException(409, str(e))
     return {"ok": True}
+
+
+@app.get("/api/reglages")
+def lire_reglages():
+    libelle, nd = noms_actuels()
+    return {"libelle": libelle, "album_non_datees": nd}
+
+
+@app.put("/api/reglages")
+def changer_reglages(corps: dict = Body(...)):
+    """Noms utilisés aux prochains envois (rien n'est renommé dans Immich). N'écrit que dans la base de l'appli."""
+    libelle = str(corps.get("libelle", "")).strip()
+    nd = str(corps.get("album_non_datees", "")).strip()
+    if not libelle or len(libelle) > 80 or len(nd) > 120:
+        raise HTTPException(422, "Libellé obligatoire (80 caractères au plus).")
+    if "/" in libelle or "\\" in libelle:
+        raise HTTPException(422, "Le libellé ne peut pas contenir « / » : il sépare les niveaux du tag.")
+    ETAT["attente"].regler("libelle", libelle)
+    ETAT["attente"].regler("album_non_datees", nd)
+    return {"libelle": libelle, "album_non_datees": nd}
 
 
 @app.get("/api/journal")

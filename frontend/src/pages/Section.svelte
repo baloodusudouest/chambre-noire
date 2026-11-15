@@ -90,7 +90,7 @@
         <p class="text-sm text-muted-foreground">Album <b class="text-foreground">{apercu.album}</b> · tag <b class="text-foreground">{apercu.tag}</b>
           {nonDatee ? ' · date fictive : 1er janvier 1900' : ` · date : 1er ${mois ? MOIS[mois - 1] : 'janvier'} ${annee}`}</p>
       {:else if !session.libelle}
-        <p class="text-sm text-destructive">CHAMBRE_NOIRE_LIBELLE manque dans la stack : noms d’album et de tag inconnus.</p>
+        <p class="text-sm text-destructive">Libellé des albums et des tags absent : à régler dans <a href="#/reglages" class="underline">Réglages › Noms dans Immich</a>.</p>
       {/if}
       <div><Button onclick={envoyer} disabled={!anneeOk || attente || !session.libelle || session.lecture_seule}>{attente ? 'Envoi…' : 'Dater et envoyer'}</Button></div>
     </fieldset>
