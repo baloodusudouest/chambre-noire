@@ -87,7 +87,7 @@
       <p class="text-sm text-muted-foreground">Exemple : album <b class="text-foreground">{exemple.album}</b>, tag <b class="text-foreground">{exemple.tag}</b> ;
         non datées : album <b class="text-foreground">{exempleNd.album}</b>, tag <b class="text-foreground">{exempleNd.tag}</b>.</p>
     {/if}
-    <p class="text-xs text-muted-foreground">Doit rester le libellé que lit Millésime pour les non datées (son préfixe de tag et son album des non datées).</p>
+    <p class="text-xs text-muted-foreground">Millésime suit ces noms s’il est relié (Connexion › Millésime) ; sinon, garder le même libellé que dans sa stack. Changer le libellé démarre de nouveaux albums et tags : les anciens restent dans Immich.</p>
     <div><Button onclick={enregistrerNoms} disabled={!change || !libelle.trim()}>Enregistrer</Button></div>
     {#if messageNoms}<p class="text-sm" role="status">{messageNoms}</p>{/if}
   </div>

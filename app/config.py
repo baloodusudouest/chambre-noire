@@ -27,6 +27,7 @@ class Config:
     # Valeurs de départ seulement (0.4.1) : le libellé et l'album des non datées se règlent dans l'appli (Réglages).
     libelle: str = ""                # « Numérisation X » : album « AAAA-MM <libellé> », tag « <libellé>/AAAA-MM »
     album_non_datees: str = ""       # vide : « Non datées <libellé> » (doit rester celui que lit Millésime)
+    jeton_millesime: str = ""        # 0.5.0 : Millésime lit /externe/noms avec ce jeton ; vide : adresse fermée
 
 
 def charger() -> Config:
@@ -44,4 +45,5 @@ def charger() -> Config:
         lecture_seule=_env("LECTURE_SEULE").lower() in ("oui", "1", "true", "yes"),
         libelle=_env("LIBELLE"),
         album_non_datees=_env("ALBUM_NON_DATEES"),
+        jeton_millesime=_env("JETON_MILLESIME"),
     )

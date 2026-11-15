@@ -14,6 +14,9 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
+import hmac
+import time
+
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -21,7 +24,7 @@ from . import __version__
 from .attente import Attente, ErreurPrise
 from .auth import COMMUN, DUREE, Sessions
 from .config import APPLI, Config, charger
-from .envoi import Envoyeur, ErreurEnvoi, ImmichEcriture
+from .envoi import Envoyeur, ErreurEnvoi, ImmichEcriture, noms
 from .immich import ApprentissageImmich, Immich
 
 ETAT: dict = {}
@@ -94,6 +97,26 @@ def sante():
             "en_attente": ETAT["attente"].en_attente(), "envoyees": ETAT["attente"].envoyees()}
 
 
+@app.get("/externe/noms")
+def noms_pour_millesime(request: Request):
+    """0.5.0 : Millésime lit ici les noms qu'utilisent les envois (libellé, album et tag des non datées),
+    pour suivre le réglage fait dans Chambre noire. Jeton CHAMBRE_NOIRE_JETON_MILLESIME ; vide : adresse fermée.
+    N'écrit rien, sauf l'heure de la lecture (montrée dans Connexion)."""
+    jeton = ETAT["cfg"].jeton_millesime
+    if not jeton:
+        raise HTTPException(404, "Adresse fermée : CHAMBRE_NOIRE_JETON_MILLESIME est vide.")
+    propose = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if not hmac.compare_digest(propose.encode(), jeton.encode()):
+        raise HTTPException(401, "Jeton refusé.")
+    libelle, nd = noms_actuels()
+    ETAT["attente"].regler("millesime_vu", time.strftime("%Y-%m-%dT%H:%M:%S"))
+    if not libelle:
+        return {"regle": False, "version": __version__}
+    album_nd, tag_nd = noms(libelle, 0, 0, True, nd)
+    return {"regle": True, "version": __version__, "libelle": libelle,
+            "album_non_datees": album_nd, "tag_non_datee": tag_nd}
+
+
 # ================================================================ connexion
 
 def noms_actuels() -> tuple[str, str]:
@@ -147,7 +170,8 @@ def deconnexion():
 def services():
     """Lit l'état d'Immich (version, clé, permissions) et du service d'apprentissage. N'écrit rien."""
     return {"immich": asdict(ETAT["immich"].etat()), "apprentissage": ETAT["apprentissage"].etat(),
-            "lecture_seule": ETAT["cfg"].lecture_seule, "libelle": noms_actuels()[0]}
+            "lecture_seule": ETAT["cfg"].lecture_seule, "libelle": noms_actuels()[0],
+            "millesime": {"ouvert": bool(ETAT["cfg"].jeton_millesime), "vu": ETAT["attente"].reglage("millesime_vu")}}
 
 
 # ================================================================ zone d'attente (étape 2)

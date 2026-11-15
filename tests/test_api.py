@@ -13,14 +13,15 @@ from tests.faux_immich import FauxImmich
 MDP = "mot-de-passe-de-test"
 
 
-def client(tmp_path, faux=None, lecture_seule=False, cle="cle-de-test", libelle="Numérisation Essai"):
+def client(tmp_path, faux=None, lecture_seule=False, cle="cle-de-test", libelle="Numérisation Essai", jeton_millesime=""):
     from app import main
     importlib.reload(main)
     faux = faux or FauxImmich()
     main.ETAT.clear()
     main.ETAT["cfg"] = config_mod.Config(password=MDP, data=tmp_path, static=tmp_path / "static",
                                          immich_url="http://immich", immich_cle=cle, ml_url="http://ml",
-                                         attente_connexion=False, lecture_seule=lecture_seule, libelle=libelle)
+                                         attente_connexion=False, lecture_seule=lecture_seule, libelle=libelle,
+                                         jeton_millesime=jeton_millesime)
     main.ETAT["transport"] = httpx.MockTransport(faux)
     return TestClient(main.app), faux
 
@@ -151,3 +152,30 @@ def test_exiger_ecriture_refuse_en_lecture_seule(tmp_path):
     with c:
         with pytest.raises(main.LectureSeule):
             main.exiger_ecriture("Immich")
+
+
+def test_noms_pour_millesime(tmp_path):
+    """0.5.0 : Millésime lit les noms des envois ; jeton vide = adresse fermée ; aucune session nécessaire."""
+    c, _ = client(tmp_path)
+    with c:
+        assert c.get("/externe/noms").status_code == 404
+    c, _ = client(tmp_path, jeton_millesime="jeton-millesime-essai")
+    with c:
+        assert c.get("/externe/noms").status_code == 401
+        assert c.get("/externe/noms", headers={"Authorization": "Bearer autre"}).status_code == 401
+        r = c.get("/externe/noms", headers={"Authorization": "Bearer jeton-millesime-essai"})
+        assert r.status_code == 200
+        j = r.json()
+        assert j["regle"] and j["libelle"] == "Numérisation Essai"
+        assert j["album_non_datees"] == "Non datées Numérisation Essai"
+        assert j["tag_non_datee"] == "Numérisation Essai/Non datée"
+        connecter(c)
+        c.put("/api/reglages", json={"libelle": "Numérisation Autre", "album_non_datees": "Sans date"})
+        j = c.get("/externe/noms", headers={"Authorization": "Bearer jeton-millesime-essai"}).json()
+        assert (j["libelle"], j["album_non_datees"], j["tag_non_datee"]) == ("Numérisation Autre", "Sans date", "Numérisation Autre/Non datée")
+        m = c.get("/api/services").json()["millesime"]
+        assert m["ouvert"] and m["vu"]
+    c, _ = client(tmp_path / "vide", libelle="", jeton_millesime="j")
+    (tmp_path / "vide").mkdir(exist_ok=True)
+    with c:
+        assert c.get("/externe/noms", headers={"Authorization": "Bearer j"}).json()["regle"] is False

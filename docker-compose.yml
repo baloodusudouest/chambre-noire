@@ -16,6 +16,7 @@ services:
       # ces deux variables ne donnent que la valeur de départ (facultatives).
       - CHAMBRE_NOIRE_LIBELLE=${CHAMBRE_NOIRE_LIBELLE:-}
       - CHAMBRE_NOIRE_ALBUM_NON_DATEES=${CHAMBRE_NOIRE_ALBUM_NON_DATEES:-}
+      - CHAMBRE_NOIRE_JETON_MILLESIME=${CHAMBRE_NOIRE_JETON_MILLESIME:-}   # 0.5.0 : Millésime lit /externe/noms ; vide : adresse fermée
       - CHAMBRE_NOIRE_LECTURE_SEULE=${CHAMBRE_NOIRE_LECTURE_SEULE:-}   # « oui » : rien n'est écrit dans Immich
     ports:
       - "${PORT_CHAMBRE_NOIRE:-8100}:8100"         # réseau local ; caméra par HTTPS (tailscale serve)
