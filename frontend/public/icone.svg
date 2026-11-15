@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Chambre noire : un tirage dans son cadre de détection, couleur de l'appli (cyan révélateur) -->
+  <rect width="512" height="512" rx="112" fill="#151311"/>
+  <g transform="rotate(-6 256 262)">
+    <rect x="156" y="150" width="200" height="228" rx="8" fill="#f2ece2"/>
+    <rect x="172" y="166" width="168" height="168" rx="2" fill="#2a3a3c"/>
+    <circle cx="292" cy="212" r="20" fill="#4fc1c9"/>
+    <path d="M172 334 L226 266 L262 304 L292 276 L340 334 Z" fill="#4fc1c9" opacity=".55"/>
+  </g>
+  <g fill="none" stroke="#4fc1c9" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 176 V104 H176"/><path d="M336 104 H408 V176"/>
+    <path d="M408 336 V408 H336"/><path d="M176 408 H104 V336"/>
+  </g>
+</svg>

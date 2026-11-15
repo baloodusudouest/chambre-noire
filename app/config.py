@@ -1,0 +1,42 @@
+"""Réglages lus dans l'environnement du conteneur. Aucune valeur personnelle dans le code :
+les noms d'album et de tag, les adresses et la clé viennent des variables de la stack."""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+APPLI = "chambre-noire"
+PREFIXE = "CHAMBRE_NOIRE_"
+
+
+def _env(nom: str, defaut: str = "") -> str:
+    return os.environ.get(PREFIXE + nom, defaut).strip()
+
+
+@dataclass(frozen=True)
+class Config:
+    password: str
+    data: Path
+    static: Path
+    immich_url: str = "http://immich_server:2283"
+    immich_cle: str = ""
+    ml_url: str = "http://immich_machine_learning:3003"
+    attente_connexion: bool = True   # délai anti-essais ; coupé dans les tests
+    lecture_seule: bool = False      # l'appli lit tout mais n'écrit rien dans Immich
+
+
+def charger() -> Config:
+    mot_de_passe = os.environ.get(PREFIXE + "PASSWORD", "")
+    if len(mot_de_passe) < 12:
+        raise SystemExit("CHAMBRE_NOIRE_PASSWORD est absent ou trop court (12 caractères au moins) : "
+                         "Chambre noire ne démarre pas.")
+    return Config(
+        password=mot_de_passe,
+        data=Path(_env("DATA", "/data")),
+        static=Path(__file__).parent / "static",
+        immich_url=_env("IMMICH_URL", "http://immich_server:2283").rstrip("/"),
+        immich_cle=_env("IMMICH_CLE"),
+        ml_url=_env("ML_URL", "http://immich_machine_learning:3003").rstrip("/"),
+        lecture_seule=_env("LECTURE_SEULE").lower() in ("oui", "1", "true", "yes"),
+    )
