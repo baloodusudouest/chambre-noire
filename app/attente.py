@@ -208,6 +208,25 @@ class Attente:
         chemin = self.dossier / "attente" / ligne["section_id"] / f"{pid}-{quoi}.jpg"
         return chemin if chemin.is_file() else None
 
+    def vignette(self, pid: str, cote: int = 480) -> Path | None:
+        """0.5.1 : petite image pour la revue (la grille chargeait les rendus de 4000 px, que Safari sur iPhone
+        n'arrive pas toujours à afficher en nombre). Faite une fois, gardée à côté du rendu."""
+        rendu = self.fichier(pid, "rendu")
+        if not rendu:
+            return None
+        chemin = rendu.with_name(f"{pid}-vignette.jpg")
+        if not chemin.is_file():
+            import io
+            from PIL import Image
+            with Image.open(rendu) as im:
+                im.draft("RGB", (cote, cote))          # décodage réduit : rapide, peu de mémoire
+                im = im.convert("RGB")
+                im.thumbnail((cote, cote))
+                tampon = io.BytesIO()
+                im.save(tampon, "JPEG", quality=80)
+            self._ecrire(chemin, tampon.getvalue())
+        return chemin
+
     def en_attente(self) -> int:
         return self._db.execute("SELECT COUNT(*) FROM prise WHERE statut='attente'").fetchone()[0]
 
@@ -217,7 +236,7 @@ class Attente:
             ligne = self._db.execute("SELECT section_id, statut FROM prise WHERE id=?", (pid,)).fetchone()
             if not ligne or ligne["statut"] != "attente":
                 return False
-            for quoi in ("rendu", "source"):
+            for quoi in ("rendu", "source", "vignette"):
                 (self.dossier / "attente" / ligne["section_id"] / f"{pid}-{quoi}.jpg").unlink(missing_ok=True)
             self._db.execute("DELETE FROM prise WHERE id=?", (pid,))
             self._db.commit()

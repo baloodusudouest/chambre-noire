@@ -101,3 +101,21 @@ def test_retirer_une_prise(tmp_path):
         assert c.delete("/api/prises/prise-0001").status_code == 404
         assert not (tmp_path / "attente/section-01/prise-0001-rendu.jpg").exists()
         assert c.get("/api/sections").json()["sections"] == []
+
+
+def test_vignette_de_revue(tmp_path):
+    """0.5.1 : la revue montre une vignette de 480 px faite une fois depuis le rendu ; retirée avec la prise."""
+    import io
+    from PIL import Image
+    from app.attente import Attente
+    a = Attente(tmp_path)
+    tampon = io.BytesIO()
+    Image.new("RGB", (4000, 3000), (120, 80, 40)).save(tampon, "JPEG")
+    a.recevoir({"id": "prise-v1", "section": "section-v", "mode": "rafale", "ordre": 1,
+                "prise_le": "2026-11-15T20:00:00Z"}, tampon.getvalue(), None)
+    v = a.vignette("prise-v1")
+    assert v and v.is_file()
+    with Image.open(v) as im:
+        assert max(im.size) <= 480
+    assert a.vignette("prise-inconnue") is None
+    assert a.retirer("prise-v1") and not v.exists()

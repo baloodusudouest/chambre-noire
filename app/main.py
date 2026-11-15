@@ -201,7 +201,7 @@ def prises_de_section(section: str):
 
 @app.get("/api/prises/{pid}/{quoi}.jpg")
 def image_de_prise(pid: str, quoi: str):
-    chemin = ETAT["attente"].fichier(pid, quoi)
+    chemin = ETAT["attente"].vignette(pid) if quoi == "vignette" else ETAT["attente"].fichier(pid, quoi)
     if not chemin:
         raise HTTPException(404, "Prise introuvable.")
     return FileResponse(chemin, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})

@@ -10,6 +10,9 @@
 
   let { section, session, onchange } = $props()
   let prises = $state([])
+  // 0.5.1 : nouvel essai automatique (jusqu'à 3) quand une vignette ne se charge pas, puis bouton pour réessayer
+  let essais = $state({})
+  function rateE(id) { setTimeout(() => (essais[id] = (essais[id] ?? 0) + 1), 800 * ((essais[id] ?? 0) + 1)) }
   let annee = $state('')
   let mois = $state(0)
   let nonDatee = $state(false)
@@ -63,8 +66,14 @@
     <ul class="mt-3 grid grid-cols-3 gap-2 md:grid-cols-6" aria-label="Photos">
       {#each prises as p (p.id)}
         <li class="relative overflow-hidden rounded-lg bg-black/40">
-          <img src={`/api/prises/${p.id}/rendu.jpg`} alt="Photo à envoyer" loading="lazy"
-               class="aspect-square w-full object-contain transition-transform duration-200" style="transform: rotate({p.rotation * 90}deg)" />
+          {#if (essais[p.id] ?? 0) < 4}
+            <img src={`/api/prises/${p.id}/vignette.jpg${essais[p.id] ? `?essai=${essais[p.id]}` : ''}`} alt="Photo à envoyer" loading="lazy" decoding="async"
+                 onerror={() => rateE(p.id)}
+                 class="aspect-square w-full object-contain transition-transform duration-200" style="transform: rotate({p.rotation * 90}deg)" />
+          {:else}
+            <button type="button" class="flex aspect-square w-full items-center justify-center p-2 text-center text-xs text-muted-foreground"
+                    onclick={() => (essais[p.id] = 0)}>Image non chargée — toucher pour réessayer</button>
+          {/if}
           {#if p.erreur}<span class="absolute inset-x-0 top-0 bg-destructive/90 px-1 text-[10px] text-white">{p.erreur}</span>{/if}
           <span class="absolute inset-x-0 bottom-0 flex justify-between bg-black/55 p-0.5">
             <button type="button" class="p-1.5 text-white" onclick={() => tourner(p, -1)} aria-label="Tourner à gauche"><RotateCcw class="size-4" /></button>

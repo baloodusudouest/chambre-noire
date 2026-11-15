@@ -73,6 +73,11 @@ def test_rafale_prise_automatique(adresse):
         page.select_option("select[aria-label=Mois]", "5")
         page.fill("input[aria-label=Année]", "1987")
         page.wait_for_selector("text=1987-05 Numérisation Démo")
+        # 0.5.1 : les vignettes de la revue se chargent toutes (plus de rendu de 4000 px dans la grille)
+        page.wait_for_function("[...document.querySelectorAll(\"ul[aria-label='Photos'] img\")].length > 0 && "
+                               "[...document.querySelectorAll(\"ul[aria-label='Photos'] img\")].every(i => i.complete && i.naturalWidth > 0)",
+                               timeout=15000)
+        assert all("/vignette.jpg" in u for u in page.locator("ul[aria-label='Photos'] img").evaluate_all("els => els.map(e => e.src)"))
         page.click("text=Dater et envoyer")
         page.wait_for_selector("text=Rien à traiter", timeout=30000)
         page.goto(adresse + "/?essai#/reglages")

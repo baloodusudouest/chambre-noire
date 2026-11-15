@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 0.5.1 — 16 novembre 2026
+- **Revue : toutes les photos s'affichent.** La grille chargeait le rendu complet de chaque prise (jusqu'à 4000 px, plusieurs Mo) ; sur iPhone, une partie restait en image cassée (signalé par Julien). Elle charge maintenant une vignette de 480 px (`/api/prises/{id}/vignette.jpg`), faite une fois sur le NAS à partir du rendu et gardée à côté (retirée avec la prise). L'envoi dans Immich utilise toujours le rendu complet.
+- Une vignette qui ne se charge pas est redemandée seule jusqu'à 3 fois, puis laisse un bouton « toucher pour réessayer » au lieu de l'image cassée.
+- Tests : vignette ≤ 480 px et retirée avec la prise ; dans le parcours caméra, toutes les vignettes de la revue chargées. 42 tests.
+
 ## 0.5.0 — 15 novembre 2026
 - **Millésime suit les noms réglés ici.** Nouvelle adresse `GET /externe/noms` (jeton `CHAMBRE_NOIRE_JETON_MILLESIME`, vide : fermée, comparaison en temps constant) : libellé, album et tag des non datées. Millésime ≥ 2.9.0 la lit à chaque relecture d'Immich : le libellé ne se règle plus qu'à un endroit, Réglages › Noms dans Immich. Rien d'autre n'est donné (ni photo, ni journal).
 - **Connexion : tuile Millésime** (adresse ouverte ou fermée, dernière lecture).
