@@ -102,7 +102,7 @@
     <h2 class="text-lg font-semibold">Millésime</h2>
     <p class="mt-1 text-sm text-muted-foreground">Millésime date les photos non datées. Il vient lire ici, à chaque relecture d’Immich, le libellé, l’album et le tag des non datées réglés dans Réglages › Noms dans Immich, et les suit. Chambre noire n’écrit rien dans Millésime.</p>
     <p class="mt-3 text-sm">
-      {#if !s.millesime.ouvert}Adresse fermée : pose <code>MAISON_JETON</code> dans la stack (jeton commun des applis maison), ou l’ancien <code>CHAMBRE_NOIRE_JETON_MILLESIME</code> (même valeur que <code>MILLESIME_JETON_CHAMBRE_NOIRE</code>).
+      {#if !s.millesime.ouvert}Adresse fermée : pose <code>MAISON_JETON</code> dans la stack (jeton commun des applis maison, le même que lit Millésime).
       {:else if s.millesime.vu}Dernière lecture : {quand(s.millesime.vu)}.{:else}Millésime n’est encore jamais venu lire.{/if}
     </p>
   </section>

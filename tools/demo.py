@@ -2,6 +2,7 @@
 
 python -m tools.demo  →  http://127.0.0.1:8100 , mot de passe « demonstration-12 »
 DEMO_PERMISSIONS=manque : la clé n'a pas queue.update (voyant orange dans Connexion).
+0.7.0 : faux Anneau pour « Restaurer les réglages » (deux sauvegardes inventées).
 """
 from __future__ import annotations
 
@@ -22,6 +23,20 @@ main.ETAT["cfg"] = config_mod.Config(password="demonstration-12", data=Path(temp
                                      immich_url="http://immich", immich_cle="cle-de-test", ml_url="http://ml",
                                      attente_connexion=False, libelle="Numérisation Démo")
 main.ETAT["transport"] = httpx.MockTransport(FauxImmich(permissions=perms))
+
+os.environ.setdefault("MAISON_JETON", "jeton-de-demonstration")
+SAUVEGARDES = {"2026-11-15": {"libelle": "Numérisation Sauvée", "album_non_datees": "Sans date"},
+               "2026-11-14": {"libelle": "Numérisation Démo", "album_non_datees": ""}}
+
+
+def faux_anneau(adresse: str, jeton: str) -> dict:
+    if "?le=" not in adresse:
+        return {"dates": sorted(SAUVEGARDES, reverse=True)}
+    le = adresse.split("?le=")[1]
+    return {"le": le, "version": "0.7.0", "reglages": SAUVEGARDES[le]}
+
+
+main.ETAT["lire_anneau"] = faux_anneau
 
 if __name__ == "__main__":
     uvicorn.run(main.app, host="127.0.0.1", port=int(os.environ.get("DEMO_PORT", "8100")), log_level="warning")

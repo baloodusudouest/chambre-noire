@@ -51,6 +51,15 @@ def test_parcours(adresse, taille):
         page.click("text=Enregistrer")
         page.wait_for_selector("text=utilisé dès le prochain envoi")
         page.wait_for_selector(f"text=Numérisation Écran {taille[0]}/1987-05")
+        # 0.7.0 : Restaurer les réglages (faux Anneau de tools/demo.py)
+        restaurer = page.get_by_role("region", name="Restaurer les réglages")
+        restaurer.locator("select").select_option("2026-11-15")
+        restaurer.get_by_text("Numérisation Sauvée").wait_for()
+        restaurer.get_by_role("button", name="Restaurer ces réglages").click()
+        restaurer.get_by_role("button", name="Confirmer la restauration").click()
+        restaurer.get_by_text("Réglages restaurés depuis la sauvegarde").wait_for()
+        assert page.input_value("input[placeholder='Numérisation …']") == "Numérisation Sauvée"
+        page.get_by_role("region", name="Journal", exact=True).get_by_text("Réglages restaurés (sauvegarde du").first.wait_for()
         from app import __version__
         page.wait_for_selector(f"text=Chambre noire {__version__}")
         large = page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")

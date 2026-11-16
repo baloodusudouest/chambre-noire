@@ -1,5 +1,6 @@
 <script>
-  // « Réglages » : le journal des envois (avec Annuler), l'écriture dans Immich. Toujours en bas : version, déconnexion.
+  // « Réglages » : le journal (envois avec Annuler, réglages repris ou restaurés), les noms dans Immich,
+  // la restauration depuis une sauvegarde de l'Anneau (0.7.0), l'écriture dans Immich. Toujours en bas : version, déconnexion.
   import { onMount } from 'svelte'
   import { api } from '$lib/api.js'
   import { Button } from '$lib/components/ui/button/index.js'
@@ -36,7 +37,45 @@
     confirmer = null
     lire()
   }
-  onMount(lire)
+  // ---- 0.7.0 : restaurer les réglages depuis une sauvegarde de l'Anneau (réglages seulement, permis en lecture seule)
+  const NOMS_REGLAGES = { libelle: 'Libellé des albums et des tags', album_non_datees: 'Album des photos non datées' }
+  const valeur = (v) => (v === '' || v === null || v === undefined ? '(vide)' : String(v))
+  let dates = $state(null)
+  let choix = $state('')
+  let apercu = $state(null)
+  let confirmerRestaurer = $state(false)
+  let messageRestaurer = $state('')
+  async function lireDates() {
+    messageRestaurer = ''
+    try { dates = (await api.get('/api/restaurer')).dates } catch (err) { dates = []; messageRestaurer = err.message }
+  }
+  async function voir() {
+    apercu = null
+    confirmerRestaurer = false
+    messageRestaurer = ''
+    if (!choix) return
+    try { apercu = await api.get(`/api/restaurer?le=${encodeURIComponent(choix)}`) } catch (err) { messageRestaurer = err.message }
+  }
+  async function restaurer() {
+    messageRestaurer = ''
+    try {
+      const r = await api.post('/api/restaurer', { le: choix })
+      libelle = r.reglages.libelle
+      albumNd = r.reglages.album_non_datees
+      messageRestaurer = r.appliques.length
+        ? `Réglages restaurés depuis la sauvegarde du ${jour(choix)} (${r.appliques.length}).`
+        : 'Rien à restaurer : les réglages sont déjà ceux de cette sauvegarde.'
+      apercu = null
+      await relire?.()
+      lire()
+    } catch (err) { messageRestaurer = err.message }
+    confirmerRestaurer = false
+  }
+  const jour = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('fr-FR', { dateStyle: 'long' })
+  const ligneJournal = (e) => e.action === 'restauration'
+    ? `Réglages restaurés (sauvegarde du ${jour(e.details.le)})`
+    : `Réglage repris de la stack : ${NOMS_REGLAGES[e.details.cle] || e.details.cle}`
+  onMount(() => { lire(); lireDates() })
 </script>
 
 <header class="mb-5">
@@ -44,13 +83,19 @@
   <h1 class="titre">Réglages</h1>
 </header>
 
-<section class="rounded-2xl border bg-card p-5" aria-label="Journal des envois">
-  <h2 class="text-lg font-semibold">Journal des envois</h2>
+<section class="rounded-2xl border bg-card p-5" aria-label="Journal">
+  <h2 class="text-lg font-semibold">Journal</h2>
   {#if journal && !journal.length}
     <p class="mt-1 text-sm text-muted-foreground">Aucun envoi pour l’instant.</p>
   {:else if journal}
     <ul class="mt-3 grid gap-3">
       {#each journal as e (e.id)}
+        {#if e.action !== 'envoi'}
+          <li class="border-t pt-3 text-sm first:border-t-0 first:pt-0">
+            <span class="min-w-0 break-words">{ligneJournal(e)}</span>
+            <br /><span class="text-muted-foreground">{date(e.quand)}</span>
+          </li>
+        {:else}
         <li class="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm first:border-t-0 first:pt-0">
           <span>
             <span class="font-medium">{e.details.album}</span> — {e.details.assets.length} photo{e.details.assets.length > 1 ? 's' : ''}
@@ -67,6 +112,7 @@
             {/if}
           {/if}
         </li>
+        {/if}
       {/each}
     </ul>
     <p class="mt-3 text-xs text-muted-foreground">Annuler ne touche que les photos de cet envoi : retirées de l’album et du tag, puis mises à la corbeille d’Immich (récupérables 30 jours).</p>
@@ -91,6 +137,46 @@
     <div><Button onclick={enregistrerNoms} disabled={!change || !libelle.trim()}>Enregistrer</Button></div>
     {#if messageNoms}<p class="text-sm" role="status">{messageNoms}</p>{/if}
   </div>
+</section>
+
+<section class="mt-4 rounded-2xl border bg-card p-5" aria-label="Restaurer les réglages">
+  <h2 class="text-lg font-semibold">Restaurer les réglages</h2>
+  <p class="mt-1 text-sm text-muted-foreground">L’Anneau garde chaque nuit une copie des réglages de Chambre noire (noms dans Immich, jamais de clé ni de mot de passe). Choisir une date pour voir ce qui changerait.</p>
+  {#if dates && dates.length}
+    <div class="mt-3 flex flex-wrap items-end gap-3">
+      <label class="grid min-w-0 gap-1 text-sm">Sauvegarde du
+        <select bind:value={choix} onchange={voir} class="h-11 rounded-lg border bg-background px-3">
+          <option value="">Choisir une date…</option>
+          {#each dates as d (d)}<option value={d}>{jour(d)}</option>{/each}
+        </select>
+      </label>
+    </div>
+  {:else if dates}
+    {#if !messageRestaurer}<p class="mt-3 text-sm text-muted-foreground">Aucune sauvegarde chez l’Anneau pour l’instant.</p>{/if}
+  {/if}
+  {#if apercu}
+    {#if apercu.differences.length}
+      <ul class="mt-3 grid gap-2 text-sm" aria-label="Différences">
+        {#each apercu.differences as d (d.cle)}
+          <li class="min-w-0 break-words border-t pt-2 first:border-t-0 first:pt-0">
+            <span class="text-muted-foreground">{NOMS_REGLAGES[d.cle] || d.cle} :</span>
+            {valeur(d.actuel)} → <b>{valeur(d.sauve)}</b>
+          </li>
+        {/each}
+      </ul>
+      <div class="mt-3 flex flex-wrap gap-2">
+        {#if confirmerRestaurer}
+          <Button onclick={restaurer}>Confirmer la restauration</Button>
+          <Button variant="outline" onclick={() => (confirmerRestaurer = false)}>Non</Button>
+        {:else}
+          <Button onclick={() => (confirmerRestaurer = true)}>Restaurer ces réglages</Button>
+        {/if}
+      </div>
+    {:else}
+      <p class="mt-3 text-sm text-muted-foreground">Les réglages sont déjà ceux de cette sauvegarde.</p>
+    {/if}
+  {/if}
+  {#if messageRestaurer}<p class="mt-3 text-sm" role="status">{messageRestaurer}</p>{/if}
 </section>
 
 <section class="mt-4 rounded-2xl border bg-card p-5">

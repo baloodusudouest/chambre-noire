@@ -5,11 +5,14 @@
 0.2.0 (zone d'attente) : /api/prises (réception idempotente), /api/sections, images des prises.
 0.4.0 (envoi) : rotation d'une prise, /api/sections/{id}/envoyer (date, tag, album, description, rangement),
 /api/journal et Annuler (limité aux photos du journal). Seules routes qui écrivent dans Immich.
+0.7.0 (réglages et sauvegarde) : réglages d'usage dans l'appli seulement (variables reprises une fois),
+/externe/sauvegarde (jeton commun, lue par l'Anneau), /api/restaurer ; anciens noms de variables retirés.
 """
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
@@ -28,6 +31,16 @@ from .immich import ApprentissageImmich, Immich
 
 ETAT: dict = {}
 PUBLIQUES = ("/api/connexion", "/api/session")
+
+# ---------------------------------------------------------------- réglages d'usage (0.7.0, contrat de sauvegarde 1)
+# Gardés dans la table « reglage » de la base de l'appli (depuis 0.4.1) ; tous des textes.
+REGLAGES = ("libelle", "album_non_datees")
+# Anciennes variables de la stack, lues UNE fois (premier démarrage) pour reprendre la valeur, puis plus jamais.
+REGLAGES_VARIABLES = {"libelle": "CHAMBRE_NOIRE_LIBELLE", "album_non_datees": "CHAMBRE_NOIRE_ALBUM_NON_DATEES"}
+# Clés à ne jamais sortir de l'appli, en plus de ce que maison.est_secret() écarte déjà. « millesime_vu » est dans
+# la même table mais n'est pas un réglage (heure de la dernière lecture de Millésime).
+EXCLUS_SAUVEGARDE: tuple[str, ...] = ("millesime_vu",)
+JOUR = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _fichier_generation(cfg: Config) -> Path:
@@ -50,13 +63,31 @@ async def cycle(app: FastAPI):
                 immich=Immich(cfg.immich_url, cfg.immich_cle, transport), attente=Attente(cfg.data),
                 apprentissage=ApprentissageImmich(cfg.ml_url, transport))
     ETAT["envoyeur"] = Envoyeur(ETAT["attente"], ImmichEcriture(cfg.immich_url, cfg.immich_cle, transport), noms_actuels)
+    reprendre_reglages(ETAT["attente"], cfg)
     yield
+
+
+def reprendre_reglages(attente: Attente, cfg: Config) -> list[str]:
+    """0.7.0 : au premier démarrage, un réglage absent de la base prend la valeur de son ancienne variable (si elle est
+    posée), sinon reste vide. Il est alors écrit dans la base : au démarrage suivant, la variable n'est plus regardée.
+    Une ligne au journal par réglage repris."""
+    repris = []
+    for k in REGLAGES:
+        if attente.reglage(k) is not None:
+            continue
+        valeur = str(getattr(cfg, k) or "").strip()
+        attente.regler(k, valeur)
+        if valeur:
+            attente.noter("", "reglage", {"cle": k, "variable": REGLAGES_VARIABLES[k]})
+            repris.append(k)
+    return repris
 
 
 app = FastAPI(title=APPLI, version=__version__, lifespan=cycle, docs_url=None, redoc_url=None)
 
 
 # ================================================================ sécurité
+# Le garde ne regarde que /api/… : /externe/… (portes à jeton) et /health passent sans session.
 
 @app.middleware("http")
 async def garde(request: Request, appel):
@@ -96,20 +127,14 @@ def sante():
             "en_attente": ETAT["attente"].en_attente(), "envoyees": ETAT["attente"].envoyees()}
 
 
-def jetons_millesime() -> tuple[str, ...]:
-    """0.6.0 : jetons acceptés sur /externe/noms : l'ancien jeton propre (CHAMBRE_NOIRE_JETON_MILLESIME) et le jeton
-    commun de la maison (MAISON_JETON, MAISON_JETON_ANCIEN). Aucun : adresse fermée."""
-    return tuple(j for j in (ETAT["cfg"].jeton_millesime, *maison.jetons()) if j)
-
-
 @app.get("/externe/noms")
 def noms_pour_millesime(request: Request):
     """0.5.0 : Millésime lit ici les noms qu'utilisent les envois (libellé, album et tag des non datées),
-    pour suivre le réglage fait dans Chambre noire. Jeton CHAMBRE_NOIRE_JETON_MILLESIME ou, depuis 0.6.0,
-    MAISON_JETON ; aucun des deux : adresse fermée. N'écrit rien, sauf l'heure de la lecture (montrée dans Connexion)."""
-    acceptes = jetons_millesime()
+    pour suivre le réglage fait dans Chambre noire. 0.7.0 : jeton commun seul (MAISON_JETON, MAISON_JETON_ANCIEN
+    pendant un changement) ; vide : adresse fermée. N'écrit rien, sauf l'heure de la lecture (montrée dans Connexion)."""
+    acceptes = maison.jetons()
     if not acceptes:
-        raise HTTPException(404, "Adresse fermée : ni MAISON_JETON ni CHAMBRE_NOIRE_JETON_MILLESIME ne sont posés.")
+        raise HTTPException(404, "Adresse fermée : MAISON_JETON n'est pas posé.")
     # « Authorization: Bearer … » (ou X-Maison-Jeton) ; l'en-tête historique acceptait aussi le jeton sans « Bearer ».
     propose = maison.jeton_propose(request.headers) or request.headers.get("authorization", "").strip()
     if not maison.jeton_valide(propose, acceptes):      # temps constant
@@ -125,12 +150,16 @@ def noms_pour_millesime(request: Request):
 
 # ================================================================ connexion
 
+def reglages_actuels() -> dict:
+    """Réglages d'usage, lus dans la base de l'appli (seule source depuis 0.7.0)."""
+    a = ETAT["attente"]
+    return {k: a.reglage(k) or "" for k in REGLAGES}
+
+
 def noms_actuels() -> tuple[str, str]:
-    """Libellé et album des non datées : réglés dans l'appli, sinon valeur de départ de la stack."""
-    a, c = ETAT["attente"], ETAT["cfg"]
-    libelle = a.reglage("libelle")
-    nd = a.reglage("album_non_datees")
-    return (c.libelle if libelle is None else libelle), (c.album_non_datees if nd is None else nd)
+    """Libellé et album des non datées (Réglages › Noms dans Immich)."""
+    r = reglages_actuels()
+    return r["libelle"], r["album_non_datees"]
 
 
 def _origine_lecture_seule() -> str:
@@ -185,7 +214,7 @@ def services():
     return {"immich": asdict(ETAT["immich"].etat()), "apprentissage": ETAT["apprentissage"].etat(),
             "lecture_seule": ETAT["cfg"].lecture_seule, "origine_lecture_seule": _origine_lecture_seule(),
             "libelle": noms_actuels()[0],
-            "millesime": {"ouvert": bool(jetons_millesime()), "vu": ETAT["attente"].reglage("millesime_vu")}}
+            "millesime": {"ouvert": bool(maison.jetons()), "vu": ETAT["attente"].reglage("millesime_vu")}}
 
 
 # ================================================================ zone d'attente (étape 2)
@@ -241,24 +270,107 @@ def envoyer_section(sid: str, corps: dict = Body(default={})):
     return {"ok": True}
 
 
+# ================================================================ réglages (0.4.1 ; 0.7.0 : seule source)
+# Réglages internes de l'appli : les changer ou les restaurer est permis même en lecture seule
+# (la lecture seule ne protège qu'Immich).
+
+def valider_reglages(valeurs: dict) -> dict:
+    """Vérifie les réglages reçus (écran ou sauvegarde) ; seules les clés connues comptent. HTTPException 400 sinon."""
+    propres = {}
+    for k, v in valeurs.items():
+        if k not in REGLAGES:
+            continue
+        if not isinstance(v, str):
+            raise HTTPException(400, f"Valeur refusée pour « {k} » : texte attendu.")
+        propres[k] = v.strip()
+    if "libelle" in propres:
+        libelle = propres["libelle"]
+        if not libelle or len(libelle) > 80:
+            raise HTTPException(400, "Libellé obligatoire (80 caractères au plus).")
+        if "/" in libelle or "\\" in libelle:
+            raise HTTPException(400, "Le libellé ne peut pas contenir « / » : il sépare les niveaux du tag.")
+    if len(propres.get("album_non_datees", "")) > 120:
+        raise HTTPException(400, "Album des non datées : 120 caractères au plus.")
+    return propres
+
+
+def appliquer_reglages(propres: dict) -> dict:
+    for k, v in propres.items():
+        ETAT["attente"].regler(k, v)
+    return reglages_actuels()
+
+
 @app.get("/api/reglages")
 def lire_reglages():
-    libelle, nd = noms_actuels()
-    return {"libelle": libelle, "album_non_datees": nd}
+    return reglages_actuels()
 
 
 @app.put("/api/reglages")
-def changer_reglages(corps: dict = Body(...)):
-    """Noms utilisés aux prochains envois (rien n'est renommé dans Immich). N'écrit que dans la base de l'appli."""
-    libelle = str(corps.get("libelle", "")).strip()
-    nd = str(corps.get("album_non_datees", "")).strip()
-    if not libelle or len(libelle) > 80 or len(nd) > 120:
-        raise HTTPException(422, "Libellé obligatoire (80 caractères au plus).")
-    if "/" in libelle or "\\" in libelle:
-        raise HTTPException(422, "Le libellé ne peut pas contenir « / » : il sépare les niveaux du tag.")
-    ETAT["attente"].regler("libelle", libelle)
-    ETAT["attente"].regler("album_non_datees", nd)
-    return {"libelle": libelle, "album_non_datees": nd}
+def changer_reglages(corps=Body(...)):
+    """Noms utilisés aux prochains envois (rien n'est renommé dans Immich). N'écrit que dans la base de l'appli.
+    Seules les clés envoyées changent."""
+    if not isinstance(corps, dict):
+        raise HTTPException(400, "Réglages attendus sous la forme {clé: valeur}.")
+    return appliquer_reglages(valider_reglages(corps))
+
+
+# ================================================================ sauvegarde (0.7.0, contrat de sauvegarde 1)
+
+@app.get("/externe/sauvegarde")
+def externe_sauvegarde(request: Request):
+    """Lue chaque nuit par l'Anneau, avec le jeton commun. Réglages publics et version seulement."""
+    acceptes = maison.jetons()
+    if not acceptes:
+        raise HTTPException(404, "Not Found")                 # MAISON_JETON vide : porte fermée
+    if not maison.jeton_valide(maison.jeton_propose(request.headers), acceptes):
+        raise HTTPException(401, "Jeton commun manquant ou invalide.")
+    return maison.sauvegarde(APPLI, __version__, reglages_actuels(), exclus=EXCLUS_SAUVEGARDE)
+
+
+def _demander_anneau(le: str = "") -> dict:
+    """Demande à l'Anneau ; ses pannes deviennent des messages clairs (404 rien à restaurer, 503 injoignable)."""
+    if le and not JOUR.match(le):
+        raise HTTPException(400, "Date attendue sous la forme AAAA-MM-JJ.")
+    if not maison.jeton_a_envoyer():
+        raise HTTPException(503, "MAISON_JETON n'est pas posé dans la stack : l'Anneau ne peut pas être interrogé.")
+    try:
+        reponse = maison.lire_sauvegarde(APPLI, le, lire=ETAT.get("lire_anneau"))
+    except Exception as exc:                                  # noqa: BLE001 — urllib, réseau, JSON…
+        if getattr(exc, "code", None) == 404:
+            raise HTTPException(404, "L'Anneau n'a aucune sauvegarde de Chambre noire"
+                                     f"{' le ' + le if le else ''}.") from exc
+        raise HTTPException(503, "L'Anneau ne répond pas : restauration impossible pour l'instant "
+                                 f"({exc.__class__.__name__}).") from exc
+    if not isinstance(reponse, dict):
+        raise HTTPException(503, "Réponse de l'Anneau illisible.")
+    if le and not isinstance(reponse.get("reglages"), dict):
+        raise HTTPException(404, f"L'Anneau n'a aucune sauvegarde de Chambre noire le {le}.")
+    return reponse
+
+
+@app.get("/api/restaurer")
+def restaurer_voir(le: str = ""):
+    if not le:
+        dates = _demander_anneau().get("dates") or []
+        return {"dates": [d for d in dates if isinstance(d, str)]}
+    sauve = _demander_anneau(le)
+    return {"le": le, "version": sauve.get("version", ""),
+            "differences": maison.differences(reglages_actuels(), sauve["reglages"], EXCLUS_SAUVEGARDE)}
+
+
+@app.post("/api/restaurer")
+def restaurer(corps=Body(...)):
+    """Applique les réglages d'une sauvegarde de l'Anneau qui diffèrent de l'actuel (réglages seulement)."""
+    le = str(corps.get("le", "")) if isinstance(corps, dict) else ""
+    if not le:
+        raise HTTPException(400, "Choisis la date de la sauvegarde à restaurer.")
+    sauve = _demander_anneau(le)
+    diffs = maison.differences(reglages_actuels(), sauve["reglages"], EXCLUS_SAUVEGARDE)
+    propres = valider_reglages({d["cle"]: d["sauve"] for d in diffs})
+    reglages = appliquer_reglages(propres)
+    if propres:
+        ETAT["attente"].noter("", "restauration", {"le": le, "cles": sorted(propres)})
+    return {"le": le, "appliques": sorted(propres), "reglages": reglages}
 
 
 @app.get("/api/journal")

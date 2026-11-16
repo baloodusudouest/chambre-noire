@@ -23,6 +23,26 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
   l'emporte ; champ `origine_lecture_seule`, rendu par `/api/session` et `/api/services`) ; `/externe/noms` accepte
   `MAISON_JETON` / `MAISON_JETON_ANCIEN` en plus de `CHAMBRE_NOIRE_JETON_MILLESIME` (`jetons_millesime()` de `main.py`).
   Jamais essayé sur la vraie installation : les nouvelles variables ne sont pas encore dans la stack (tout passe par les anciens noms).
+- **0.7.0** (16/11/2026) : réglages dans l'appli, sauvegarde et restauration ; anciens noms retirés.
+  - `app/maison.py` : copie du module commun **contrat 2** (socle), non retouchée (test d'empreinte).
+  - Réglages d'usage : `libelle` et `album_non_datees`, toujours dans la table `reglage` de `chambre-noire.db` (`Attente.reglage/regler`).
+    `main.reprendre_reglages` (au démarrage) : une clé absente de la base prend la valeur de `CHAMBRE_NOIRE_LIBELLE` /
+    `CHAMBRE_NOIRE_ALBUM_NON_DATEES` (ou vide) et est écrite : la variable n'est plus jamais lue ensuite ; ligne `reglage` au journal.
+    `valider_reglages` (texte, libellé obligatoire sans « / », 80/120 caractères) sert à `PUT /api/reglages` (partiel) et à la restauration ; 400.
+  - `GET /externe/sauvegarde` (jeton commun seul, `maison.sauvegarde`, `EXCLUS_SAUVEGARDE = ("millesime_vu",)`) ;
+    `GET/POST /api/restaurer` (`_demander_anneau` : 400 date, 404 rien, 503 Anneau injoignable ou `MAISON_JETON` absent) ;
+    tuile « Restaurer les réglages » dans `pages/Reglages.svelte` ; ligne `restauration` au journal. Faux Anneau : `ETAT["lire_anneau"]`
+    (tests, `tools/demo.py`).
+  - `config.charger` : `maison.mot_de_passe()` sans ancien nom ; plus de `jeton_millesime` ; `/externe/noms` : `maison.jetons()` seul.
+  - Variables encore lues : `MAISON_PASSWORD`, `MAISON_JETON` (+ `MAISON_JETON_ANCIEN`), `MAISON_LECTURE_SEULE`, `MAISON_ANNEAU_URL` (facultative,
+    défaut `http://anneau:8094`), `CHAMBRE_NOIRE_LECTURE_SEULE`, `CHAMBRE_NOIRE_IMMICH_CLE`, `CHAMBRE_NOIRE_IMMICH_URL`, `CHAMBRE_NOIRE_ML_URL`,
+    `CHAMBRE_NOIRE_DATA` (défaut `/data`) ; `CHAMBRE_NOIRE_LIBELLE` / `CHAMBRE_NOIRE_ALBUM_NON_DATEES` au premier démarrage seulement.
+  - À retirer de la stack (après le premier démarrage) : `CHAMBRE_NOIRE_PASSWORD`, `CHAMBRE_NOIRE_JETON_MILLESIME`, `CHAMBRE_NOIRE_LIBELLE`,
+    `CHAMBRE_NOIRE_ALBUM_NON_DATEES`.
+  - **Déploiement en deux temps** : d'abord la nouvelle image avec la stack actuelle (les réglages sont repris des anciennes variables au
+    premier démarrage), vérifier Réglages, puis la nouvelle stack sans les anciennes lignes. `MAISON_PASSWORD` et `MAISON_JETON` doivent
+    déjà être posés pour Chambre noire (sinon : refus de démarrer, porte de Millésime fermée). Millésime doit envoyer `MAISON_JETON`.
+  - Jamais essayé sur la vraie installation (ni la reprise, ni la sauvegarde lue par l'Anneau, ni la restauration).
 - **0.5.1** : vignettes de 480 px dans la revue (`Attente.vignette`), nouvel essai automatique ; image cassée signalée par Julien sur iPhone.
 - **0.5.0** : `/externe/noms` (jeton `CHAMBRE_NOIRE_JETON_MILLESIME`) lu par Millésime 2.9.0 ; tuile Millésime dans Connexion.
 - Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :
@@ -39,7 +59,7 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
 ## Décisions
 - Rendu final dans l'iPhone (même code que l'aperçu) ; le NAS écrit les métadonnées, envoie, range.
 - Provenance : seulement le nom de l'album dans la description.
-- Les noms d'album et de tag viennent de la stack (aucun nom réel dans ce dépôt public). Les photos
+- Les noms d'album et de tag se règlent dans l'appli (0.7.0 : plus dans la stack ; aucun nom réel dans ce dépôt public). Les photos
   non datées gardent l'album et le tag que lit Millésime.
 
 ## Pièges

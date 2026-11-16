@@ -2,7 +2,7 @@
 album du mois, tag, description (nom de l'album), lancement du rangement du stockage.
 
 Règles :
-- les noms viennent de la stack (CHAMBRE_NOIRE_LIBELLE) : album « AAAA-MM <libellé> », tag « <libellé>/AAAA-MM » ;
+- les noms viennent de Réglages › Noms dans Immich (0.7.0 : plus de la stack) : album « AAAA-MM <libellé> », tag « <libellé>/AAAA-MM » ;
   non datées : album « Non datées <libellé> », tag « <libellé>/Non datée » (ceux que lit Millésime) ;
 - chaque écriture est notée au journal avant de rendre la main ; Annuler n'agit que sur les photos du journal ;
 - une étape ratée (album, tag, description, rangement) laisse la section « incomplète » avec un bouton Relancer :

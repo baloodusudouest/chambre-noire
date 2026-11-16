@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 0.7.0 — 16 novembre 2026
+- **Les réglages vivent dans l'appli.** Le libellé des albums et des tags et l'album des non datées (Réglages › Noms dans Immich, depuis 0.4.1) ne sont plus jamais relus dans la stack : au premier démarrage de la 0.7.0, s'ils ne sont pas déjà dans la base, ils sont repris une fois de `CHAMBRE_NOIRE_LIBELLE` et `CHAMBRE_NOIRE_ALBUM_NON_DATEES` (une ligne au journal par réglage repris), puis seul l'écran Réglages fait foi. `PUT /api/reglages` ne change que les clés envoyées ; une valeur du mauvais type, ou refusée, répond 400 avec un message clair (avant : 422).
+- **Sauvegarde par l'Anneau** : nouvelle porte `GET /externe/sauvegarde` (jeton commun `MAISON_JETON` ; vide : fermée). Elle rend seulement la version et les deux réglages, jamais de variable, de clé, de chemin ni de secret (contrat de sauvegarde 1).
+- **Restaurer les réglages** (nouvelle tuile dans Réglages) : choisir une date de sauvegarde gardée par l'Anneau, voir ce qui changerait (avant → sauvegardé), confirmer. Ne touche que les réglages de l'appli, donc permis même en lecture seule ; une ligne au journal. Anneau injoignable, `MAISON_JETON` absent ou rien à restaurer : un message clair, pas d'erreur.
+- Le journal de Réglages (« Journal ») montre aussi les réglages repris et les restaurations.
+- **Anciens noms retirés** : le mot de passe est `MAISON_PASSWORD` seul (`CHAMBRE_NOIRE_PASSWORD` ne suffit plus : l'appli refuse de démarrer) ; `/externe/noms` (Millésime) n'accepte plus que le jeton commun (`MAISON_JETON`, `MAISON_JETON_ANCIEN` pendant un changement) : `CHAMBRE_NOIRE_JETON_MILLESIME` n'ouvre plus la porte. `CHAMBRE_NOIRE_LECTURE_SEULE` reste (forçage pour cette appli seule).
+- Tests : mot de passe commun seul, ancien jeton refusé, reprise au premier démarrage puis variable ignorée, réglages par l'écran et mauvais types, sauvegarde (jeton, aucun secret, contrat 1), restauration (dates, différences, application, Anneau injoignable) ; écran Réglages avec la restauration sur PC et iPhone. 55 tests (2 de caméra passés sans fichiers de caméra simulée).
+
 ## 0.6.0 — 16 novembre 2026
 - **Variables communes de la maison** (module `app/maison.py` du socle 0.5.0, copié tel quel) :
   - mot de passe : `MAISON_PASSWORD`, repli sur `CHAMBRE_NOIRE_PASSWORD` (toujours 12 caractères au moins) ;

@@ -13,7 +13,7 @@ from tests.faux_immich import FauxImmich
 MDP = "mot-de-passe-de-test"
 
 
-def client(tmp_path, faux=None, lecture_seule=False, cle="cle-de-test", libelle="Numérisation Essai", jeton_millesime=""):
+def client(tmp_path, faux=None, lecture_seule=False, cle="cle-de-test", libelle="Numérisation Essai", album_non_datees=""):
     from app import main
     importlib.reload(main)
     faux = faux or FauxImmich()
@@ -21,7 +21,7 @@ def client(tmp_path, faux=None, lecture_seule=False, cle="cle-de-test", libelle=
     main.ETAT["cfg"] = config_mod.Config(password=MDP, data=tmp_path, static=tmp_path / "static",
                                          immich_url="http://immich", immich_cle=cle, ml_url="http://ml",
                                          attente_connexion=False, lecture_seule=lecture_seule, libelle=libelle,
-                                         jeton_millesime=jeton_millesime)
+                                         album_non_datees=album_non_datees)
     main.ETAT["transport"] = httpx.MockTransport(faux)
     return TestClient(main.app), faux
 
@@ -31,13 +31,13 @@ def connecter(c):
 
 
 def test_mot_de_passe_obligatoire(monkeypatch):
-    monkeypatch.setenv("CHAMBRE_NOIRE_PASSWORD", "court")
+    monkeypatch.setenv("MAISON_PASSWORD", "court")
     with pytest.raises(SystemExit):
         config_mod.charger()
 
 
 def test_aucune_valeur_personnelle_par_defaut(monkeypatch):
-    monkeypatch.setenv("CHAMBRE_NOIRE_PASSWORD", MDP)
+    monkeypatch.setenv("MAISON_PASSWORD", MDP)
     for v in ("IMMICH_CLE", "IMMICH_URL", "ML_URL", "DATA", "LECTURE_SEULE"):
         monkeypatch.delenv("CHAMBRE_NOIRE_" + v, raising=False)
     cfg = config_mod.charger()
@@ -154,12 +154,16 @@ def test_exiger_ecriture_refuse_en_lecture_seule(tmp_path):
             main.exiger_ecriture("Immich")
 
 
-def test_noms_pour_millesime(tmp_path):
-    """0.5.0 : Millésime lit les noms des envois ; jeton vide = adresse fermée ; aucune session nécessaire."""
+def test_noms_pour_millesime(tmp_path, monkeypatch):
+    """0.5.0 : Millésime lit les noms des envois ; jeton vide = adresse fermée ; aucune session nécessaire.
+    0.7.0 : jeton commun MAISON_JETON seul."""
+    for v in COMMUNES:
+        monkeypatch.delenv(v, raising=False)
     c, _ = client(tmp_path)
     with c:
         assert c.get("/externe/noms").status_code == 404
-    c, _ = client(tmp_path, jeton_millesime="jeton-millesime-essai")
+    monkeypatch.setenv("MAISON_JETON", "jeton-millesime-essai")
+    c, _ = client(tmp_path)
     with c:
         assert c.get("/externe/noms").status_code == 401
         assert c.get("/externe/noms", headers={"Authorization": "Bearer autre"}).status_code == 401
@@ -175,16 +179,17 @@ def test_noms_pour_millesime(tmp_path):
         assert (j["libelle"], j["album_non_datees"], j["tag_non_datee"]) == ("Numérisation Autre", "Sans date", "Numérisation Autre/Non datée")
         m = c.get("/api/services").json()["millesime"]
         assert m["ouvert"] and m["vu"]
-    c, _ = client(tmp_path / "vide", libelle="", jeton_millesime="j")
+    monkeypatch.setenv("MAISON_JETON", "j")
+    c, _ = client(tmp_path / "vide", libelle="")
     (tmp_path / "vide").mkdir(exist_ok=True)
     with c:
         assert c.get("/externe/noms", headers={"Authorization": "Bearer j"}).json()["regle"] is False
 
 
-# ================================================================ 0.6.0 : variables communes de la maison
+# ================================================================ 0.6.0 / 0.7.0 : variables communes de la maison
 
 COMMUNES = ("MAISON_PASSWORD", "MAISON_JETON", "MAISON_JETON_ANCIEN", "MAISON_LECTURE_SEULE",
-            "CHAMBRE_NOIRE_LECTURE_SEULE", "CHAMBRE_NOIRE_JETON_MILLESIME")
+            "CHAMBRE_NOIRE_LECTURE_SEULE", "CHAMBRE_NOIRE_PASSWORD", "CHAMBRE_NOIRE_JETON_MILLESIME")
 
 
 def test_module_commun_maison_non_retouche():
@@ -192,11 +197,13 @@ def test_module_commun_maison_non_retouche():
     assert maison.empreinte_calculee() == maison.empreinte_ecrite()
 
 
-def test_mot_de_passe_commun_puis_repli(monkeypatch):
+def test_mot_de_passe_commun_seul(monkeypatch):
+    """0.7.0 : MAISON_PASSWORD seul ; l'ancien nom seul ne suffit plus (refus de démarrer)."""
     for v in COMMUNES:
         monkeypatch.delenv(v, raising=False)
     monkeypatch.setenv("CHAMBRE_NOIRE_PASSWORD", "ancien-mot-de-passe")
-    assert config_mod.charger().password == "ancien-mot-de-passe"
+    with pytest.raises(SystemExit, match="MAISON_PASSWORD est absent ou trop court"):
+        config_mod.charger()
     monkeypatch.setenv("MAISON_PASSWORD", "mot-de-passe-commun")
     assert config_mod.charger().password == "mot-de-passe-commun"
     monkeypatch.setenv("MAISON_PASSWORD", "court")          # le commun trop court ne laisse pas démarrer
@@ -207,7 +214,7 @@ def test_mot_de_passe_commun_puis_repli(monkeypatch):
 def test_lecture_seule_maison_et_forcage(monkeypatch):
     for v in COMMUNES:
         monkeypatch.delenv(v, raising=False)
-    monkeypatch.setenv("CHAMBRE_NOIRE_PASSWORD", MDP)
+    monkeypatch.setenv("MAISON_PASSWORD", MDP)
     cfg = config_mod.charger()
     assert not cfg.lecture_seule and cfg.origine_lecture_seule == ""
     monkeypatch.setenv("MAISON_LECTURE_SEULE", "oui")
@@ -234,31 +241,34 @@ def test_origine_lecture_seule_annoncee(tmp_path):
         assert c.get("/api/services").json()["origine_lecture_seule"] == "maison"
 
 
-def test_porte_millesime_jeton_commun_et_ancien(tmp_path, monkeypatch):
+def test_porte_millesime_jeton_commun_seul(tmp_path, monkeypatch):
     for v in COMMUNES:
         monkeypatch.delenv(v, raising=False)
-    # jeton commun seul : la porte s'ouvre
+    # jeton commun : la porte s'ouvre
     monkeypatch.setenv("MAISON_JETON", "jeton-commun-essai")
     c, _ = client(tmp_path)
     with c:
         assert c.get("/externe/noms").status_code == 401
         assert c.get("/externe/noms", headers={"Authorization": "Bearer jeton-commun-essai"}).status_code == 200
         assert c.get("/externe/noms", headers={"X-Maison-Jeton": "jeton-commun-essai"}).status_code == 200
+        assert c.get("/externe/noms", headers={"Authorization": "jeton-commun-essai"}).status_code == 200  # en-tête historique
         assert c.get("/externe/noms", headers={"Authorization": "Bearer autre"}).status_code == 401
         connecter(c)
         assert c.get("/api/services").json()["millesime"]["ouvert"] is True
-    # ancien jeton de la paire et jeton commun acceptés ensemble (transition), et MAISON_JETON_ANCIEN
+    # 0.7.0 : l'ancien jeton de la paire n'ouvre plus la porte, même posé dans la stack ; MAISON_JETON_ANCIEN oui
+    monkeypatch.setenv("CHAMBRE_NOIRE_JETON_MILLESIME", "jeton-millesime-essai")
     monkeypatch.setenv("MAISON_JETON_ANCIEN", "jeton-commun-precedent")
-    c, _ = client(tmp_path, jeton_millesime="jeton-millesime-essai")
+    c, _ = client(tmp_path)
     with c:
-        for j in ("jeton-millesime-essai", "jeton-commun-essai", "jeton-commun-precedent"):
+        assert c.get("/externe/noms", headers={"Authorization": "Bearer jeton-millesime-essai"}).status_code == 401
+        for j in ("jeton-commun-essai", "jeton-commun-precedent"):
             assert c.get("/externe/noms", headers={"Authorization": f"Bearer {j}"}).status_code == 200
-        assert c.get("/externe/noms", headers={"Authorization": "jeton-millesime-essai"}).status_code == 200  # en-tête historique
-    # aucun jeton : porte fermée
+    # MAISON_JETON vide : porte fermée, même si l'ancien jeton est posé
     monkeypatch.delenv("MAISON_JETON")
     monkeypatch.delenv("MAISON_JETON_ANCIEN")
     c, _ = client(tmp_path)
     with c:
+        assert c.get("/externe/noms", headers={"Authorization": "Bearer jeton-millesime-essai"}).status_code == 404
         assert c.get("/externe/noms", headers={"Authorization": "Bearer "}).status_code == 404
         connecter(c)
         assert c.get("/api/services").json()["millesime"]["ouvert"] is False

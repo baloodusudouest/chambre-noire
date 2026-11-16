@@ -54,6 +54,8 @@
 ### Variables de la stack (aucune valeur par défaut dans le code)
 `CHAMBRE_NOIRE_IMMICH_CLE`, `CHAMBRE_NOIRE_ALBUM_SUFFIXE` (« AAAA-MM <suffixe> »), `CHAMBRE_NOIRE_TAG_PARENT` (« <parent>/AAAA-MM »), `CHAMBRE_NOIRE_ALBUM_NON_DATEES`, `CHAMBRE_NOIRE_TAG_NON_DATEE` (doivent rester égales à ce que lit Millésime : `MILLESIME_TAG_PREFIXE`, `MILLESIME_ALBUM_NON_DATEES`), `CHAMBRE_NOIRE_LECTURE_SEULE`, `${CARNET_PASSWORD}` (mot de passe commun).
 
+> État à la 0.7.0 (16/11/2026) : les noms se règlent dans l'appli (Réglages), le mot de passe est `MAISON_PASSWORD` et le jeton `MAISON_JETON` ; la liste à jour des variables est dans `docker-compose.yml`, `.env.example` et `REPRISE.md`.
+
 ## 3. Parcours des clics et des écrans
 
 ### Tel que construit

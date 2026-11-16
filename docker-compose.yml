@@ -8,25 +8,23 @@ services:
       - immich-server
     environment:
       - TZ=${TZ}
-      # 0.6.0 : variables communes de la maison (module app/maison.py) ; les anciennes restent lues en repli
-      - MAISON_PASSWORD=${MAISON_PASSWORD:-}                      # mot de passe commun des applis (repli : CHAMBRE_NOIRE_PASSWORD)
-      - MAISON_JETON=${MAISON_JETON:-}                            # jeton commun : ouvre /externe/noms à Millésime
+      # Variables communes de la maison (module app/maison.py)
+      - MAISON_PASSWORD=${MAISON_PASSWORD}                        # mot de passe commun des applis (12 caractères au moins)
+      - MAISON_JETON=${MAISON_JETON:-}                            # jeton commun : ouvre /externe/noms (Millésime) et /externe/sauvegarde (Anneau)
       - MAISON_LECTURE_SEULE=${MAISON_LECTURE_SEULE:-}            # « oui » : aucune appli n'écrit ; CHAMBRE_NOIRE_LECTURE_SEULE l'emporte si posée
-      - CHAMBRE_NOIRE_PASSWORD=${CARNET_PASSWORD}                 # ancien nom, en repli tant que MAISON_PASSWORD n'est pas dans la stack
+      - CHAMBRE_NOIRE_LECTURE_SEULE=${CHAMBRE_NOIRE_LECTURE_SEULE:-}   # « oui » ou « non » : force Chambre noire seule
       - CHAMBRE_NOIRE_IMMICH_URL=http://immich_server:2283
       - CHAMBRE_NOIRE_IMMICH_CLE=${CHAMBRE_NOIRE_IMMICH_CLE}       # clé d'API Immich dédiée
       - CHAMBRE_NOIRE_ML_URL=http://immich_machine_learning:3003
-      # 0.4.1 : libellé et album des non datées se règlent dans l'appli (Réglages › Noms dans Immich) ;
-      # ces deux variables ne donnent que la valeur de départ (facultatives).
-      - CHAMBRE_NOIRE_LIBELLE=${CHAMBRE_NOIRE_LIBELLE:-}
-      - CHAMBRE_NOIRE_ALBUM_NON_DATEES=${CHAMBRE_NOIRE_ALBUM_NON_DATEES:-}
-      - CHAMBRE_NOIRE_JETON_MILLESIME=${CHAMBRE_NOIRE_JETON_MILLESIME:-}   # ancien jeton de Millésime, accepté en plus de MAISON_JETON
-      - CHAMBRE_NOIRE_LECTURE_SEULE=${CHAMBRE_NOIRE_LECTURE_SEULE:-}   # « oui » ou « non » : force Chambre noire seule
+      # 0.7.0 : le libellé et l'album des non datées se règlent dans l'appli (Réglages › Noms dans Immich),
+      # sauvegardés chaque nuit par l'Anneau. Les anciennes lignes CHAMBRE_NOIRE_LIBELLE et
+      # CHAMBRE_NOIRE_ALBUM_NON_DATEES ne sont reprises qu'une fois, au premier démarrage de la 0.7.0 :
+      # les garder pour ce premier démarrage, puis les retirer de la stack.
     ports:
       - "${PORT_CHAMBRE_NOIRE:-8100}:8100"         # réseau local ; caméra par HTTPS (tailscale serve)
     volumes:
-      - ${DOCKER_ROOT}/chambre-noire:/data         # état de l'appli (sessions ; zone d'attente à l'étape 2)
+      - ${DOCKER_ROOT}/chambre-noire:/data         # état de l'appli (sessions, zone d'attente, réglages)
     labels:
-      # Chambre noire écrira dans Immich : pas de mise à jour automatique
+      # Chambre noire écrit dans Immich : pas de mise à jour automatique
       - "com.centurylinklabs.watchtower.enable=false"
     restart: unless-stopped
