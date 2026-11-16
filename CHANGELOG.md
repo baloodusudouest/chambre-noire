@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 0.6.0 — 16 novembre 2026
+- **Variables communes de la maison** (module `app/maison.py` du socle 0.5.0, copié tel quel) :
+  - mot de passe : `MAISON_PASSWORD`, repli sur `CHAMBRE_NOIRE_PASSWORD` (toujours 12 caractères au moins) ;
+  - lecture seule : `MAISON_LECTURE_SEULE` pour toute la maison ; `CHAMBRE_NOIRE_LECTURE_SEULE`, si elle dit oui ou non, l'emporte. Le bandeau et Réglages disent d'où vient la lecture seule (« toute la maison » ou « cette appli ») ;
+  - jeton commun `MAISON_JETON` (et `MAISON_JETON_ANCIEN` pendant un changement) accepté sur `/externe/noms`, en plus de l'ancien `CHAMBRE_NOIRE_JETON_MILLESIME` ; aucun des deux : adresse fermée. Comparaison en temps constant ; même en-tête qu'avant (`Authorization: Bearer …`). Connexion › Millésime compte la porte ouverte avec l'un ou l'autre.
+- Rien ne change tant que la stack n'a pas les nouvelles variables : chaque ancien nom reste lu. La clé Immich ne change pas. Chambre noire ne donne au navigateur l'adresse d'aucune autre appli : pas d'annuaire.
+- Tests : copie du module non retouchée, mot de passe commun puis repli, lecture seule de la maison et forçage par l'appli, porte de Millésime ouverte par `MAISON_JETON`, `MAISON_JETON_ANCIEN` et toujours par l'ancien jeton. 47 tests.
+
 ## 0.5.1 — 16 novembre 2026
 - **Revue : toutes les photos s'affichent.** La grille chargeait le rendu complet de chaque prise (jusqu'à 4000 px, plusieurs Mo) ; sur iPhone, une partie restait en image cassée (signalé par Julien). Elle charge maintenant une vignette de 480 px (`/api/prises/{id}/vignette.jpg`), faite une fois sur le NAS à partir du rendu et gardée à côté (retirée avec la prise). L'envoi dans Immich utilise toujours le rendu complet.
 - Une vignette qui ne se charge pas est redemandée seule jusqu'à 3 fois, puis laisse un bouton « toucher pour réessayer » au lieu de l'image cassée.

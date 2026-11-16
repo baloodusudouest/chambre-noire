@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import maison
+
 APPLI = "chambre-noire"
 PREFIXE = "CHAMBRE_NOIRE_"
 
@@ -28,12 +30,13 @@ class Config:
     libelle: str = ""                # « Numérisation X » : album « AAAA-MM <libellé> », tag « <libellé>/AAAA-MM »
     album_non_datees: str = ""       # vide : « Non datées <libellé> » (doit rester celui que lit Millésime)
     jeton_millesime: str = ""        # 0.5.0 : Millésime lit /externe/noms avec ce jeton ; vide : adresse fermée
+    origine_lecture_seule: str = ""  # 0.6.0 : « maison » (MAISON_LECTURE_SEULE), « appli » (variable propre) ou « »
 
 
 def charger() -> Config:
-    mot_de_passe = os.environ.get(PREFIXE + "PASSWORD", "")
+    mot_de_passe = maison.mot_de_passe(PREFIXE + "PASSWORD")      # 0.6.0 : MAISON_PASSWORD, repli sur l'ancien nom
     if len(mot_de_passe) < 12:
-        raise SystemExit("CHAMBRE_NOIRE_PASSWORD est absent ou trop court (12 caractères au moins) : "
+        raise SystemExit("MAISON_PASSWORD (ou CHAMBRE_NOIRE_PASSWORD) est absent ou trop court (12 caractères au moins) : "
                          "Chambre noire ne démarre pas.")
     return Config(
         password=mot_de_passe,
@@ -42,8 +45,10 @@ def charger() -> Config:
         immich_url=_env("IMMICH_URL", "http://immich_server:2283").rstrip("/"),
         immich_cle=_env("IMMICH_CLE"),
         ml_url=_env("ML_URL", "http://immich_machine_learning:3003").rstrip("/"),
-        lecture_seule=_env("LECTURE_SEULE").lower() in ("oui", "1", "true", "yes"),
+        # 0.6.0 : MAISON_LECTURE_SEULE pour toute la maison ; CHAMBRE_NOIRE_LECTURE_SEULE (oui/non) l'emporte
+        lecture_seule=maison.lecture_seule(PREFIXE + "LECTURE_SEULE"),
+        origine_lecture_seule=maison.origine_lecture_seule(PREFIXE + "LECTURE_SEULE"),
         libelle=_env("LIBELLE"),
         album_non_datees=_env("ALBUM_NON_DATEES"),
-        jeton_millesime=_env("JETON_MILLESIME"),
+        jeton_millesime=_env("JETON_MILLESIME"),   # ancien jeton propre ; MAISON_JETON est lu à chaque demande (main.py)
     )

@@ -179,3 +179,86 @@ def test_noms_pour_millesime(tmp_path):
     (tmp_path / "vide").mkdir(exist_ok=True)
     with c:
         assert c.get("/externe/noms", headers={"Authorization": "Bearer j"}).json()["regle"] is False
+
+
+# ================================================================ 0.6.0 : variables communes de la maison
+
+COMMUNES = ("MAISON_PASSWORD", "MAISON_JETON", "MAISON_JETON_ANCIEN", "MAISON_LECTURE_SEULE",
+            "CHAMBRE_NOIRE_LECTURE_SEULE", "CHAMBRE_NOIRE_JETON_MILLESIME")
+
+
+def test_module_commun_maison_non_retouche():
+    from app import maison
+    assert maison.empreinte_calculee() == maison.empreinte_ecrite()
+
+
+def test_mot_de_passe_commun_puis_repli(monkeypatch):
+    for v in COMMUNES:
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("CHAMBRE_NOIRE_PASSWORD", "ancien-mot-de-passe")
+    assert config_mod.charger().password == "ancien-mot-de-passe"
+    monkeypatch.setenv("MAISON_PASSWORD", "mot-de-passe-commun")
+    assert config_mod.charger().password == "mot-de-passe-commun"
+    monkeypatch.setenv("MAISON_PASSWORD", "court")          # le commun trop court ne laisse pas démarrer
+    with pytest.raises(SystemExit, match="MAISON_PASSWORD"):
+        config_mod.charger()
+
+
+def test_lecture_seule_maison_et_forcage(monkeypatch):
+    for v in COMMUNES:
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("CHAMBRE_NOIRE_PASSWORD", MDP)
+    cfg = config_mod.charger()
+    assert not cfg.lecture_seule and cfg.origine_lecture_seule == ""
+    monkeypatch.setenv("MAISON_LECTURE_SEULE", "oui")
+    cfg = config_mod.charger()
+    assert cfg.lecture_seule and cfg.origine_lecture_seule == "maison"
+    monkeypatch.setenv("CHAMBRE_NOIRE_LECTURE_SEULE", "non")       # Chambre noire écrit malgré la maison
+    cfg = config_mod.charger()
+    assert not cfg.lecture_seule and cfg.origine_lecture_seule == ""
+    monkeypatch.delenv("MAISON_LECTURE_SEULE")
+    monkeypatch.setenv("CHAMBRE_NOIRE_LECTURE_SEULE", "1")         # ancienne valeur acceptée
+    cfg = config_mod.charger()
+    assert cfg.lecture_seule and cfg.origine_lecture_seule == "appli"
+
+
+def test_origine_lecture_seule_annoncee(tmp_path):
+    from dataclasses import replace
+    from app import main
+    c, _ = client(tmp_path, lecture_seule=True)
+    with c:
+        connecter(c)
+        assert c.get("/api/session").json()["origine_lecture_seule"] == "appli"
+        main.ETAT["cfg"] = replace(main.ETAT["cfg"], origine_lecture_seule="maison")
+        assert c.get("/api/session").json()["origine_lecture_seule"] == "maison"
+        assert c.get("/api/services").json()["origine_lecture_seule"] == "maison"
+
+
+def test_porte_millesime_jeton_commun_et_ancien(tmp_path, monkeypatch):
+    for v in COMMUNES:
+        monkeypatch.delenv(v, raising=False)
+    # jeton commun seul : la porte s'ouvre
+    monkeypatch.setenv("MAISON_JETON", "jeton-commun-essai")
+    c, _ = client(tmp_path)
+    with c:
+        assert c.get("/externe/noms").status_code == 401
+        assert c.get("/externe/noms", headers={"Authorization": "Bearer jeton-commun-essai"}).status_code == 200
+        assert c.get("/externe/noms", headers={"X-Maison-Jeton": "jeton-commun-essai"}).status_code == 200
+        assert c.get("/externe/noms", headers={"Authorization": "Bearer autre"}).status_code == 401
+        connecter(c)
+        assert c.get("/api/services").json()["millesime"]["ouvert"] is True
+    # ancien jeton de la paire et jeton commun acceptés ensemble (transition), et MAISON_JETON_ANCIEN
+    monkeypatch.setenv("MAISON_JETON_ANCIEN", "jeton-commun-precedent")
+    c, _ = client(tmp_path, jeton_millesime="jeton-millesime-essai")
+    with c:
+        for j in ("jeton-millesime-essai", "jeton-commun-essai", "jeton-commun-precedent"):
+            assert c.get("/externe/noms", headers={"Authorization": f"Bearer {j}"}).status_code == 200
+        assert c.get("/externe/noms", headers={"Authorization": "jeton-millesime-essai"}).status_code == 200  # en-tête historique
+    # aucun jeton : porte fermée
+    monkeypatch.delenv("MAISON_JETON")
+    monkeypatch.delenv("MAISON_JETON_ANCIEN")
+    c, _ = client(tmp_path)
+    with c:
+        assert c.get("/externe/noms", headers={"Authorization": "Bearer "}).status_code == 404
+        connecter(c)
+        assert c.get("/api/services").json()["millesime"]["ouvert"] is False

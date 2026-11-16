@@ -7,7 +7,7 @@ Réécriture sur le socle de « Scan Immich » (page unique servie par nginx, en
 numériser à l'iPhone les tirages papier d'albums familiaux et les envoyer dans Immich, datés, tagués, rangés.
 Dossier complet (besoin, technique, parcours, design, données, plan, écarts, avis du conseil) : `docs/dossier.md`.
 
-## État (15/11/2026)
+## État (16/11/2026)
 - **0.1.0** : squelette, déployé et vérifié sur le NAS (Connexion verte avec la vraie clé).
 - **0.2.0** : zone d'attente (NAS : réception idempotente, SQLite, fichiers dans /data/attente ; iPhone : file
   d'envoi avec accusé de réception) et écran À traiter. 26 tests verts en local. Pas encore essayée sur le NAS.
@@ -18,6 +18,11 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
   journal + Annuler. 38 tests verts. Jamais essayé contre le vrai Immich : faire un premier envoi en lecture
   seule coupée, sur 2 photos, et vérifier album, tag, date, description, rangement ; puis essayer Annuler.
 - **0.4.1** : libellé et album des non datées réglés dans l'appli (Réglages), la stack ne donne que le départ.
+- **0.6.0** (16/11/2026) : variables communes (module `app/maison.py`, copie du socle 0.5.0 : ne pas le modifier ici).
+  `config.charger` lit `MAISON_PASSWORD` (repli `CHAMBRE_NOIRE_PASSWORD`) et `MAISON_LECTURE_SEULE` (`CHAMBRE_NOIRE_LECTURE_SEULE`
+  l'emporte ; champ `origine_lecture_seule`, rendu par `/api/session` et `/api/services`) ; `/externe/noms` accepte
+  `MAISON_JETON` / `MAISON_JETON_ANCIEN` en plus de `CHAMBRE_NOIRE_JETON_MILLESIME` (`jetons_millesime()` de `main.py`).
+  Jamais essayé sur la vraie installation : les nouvelles variables ne sont pas encore dans la stack (tout passe par les anciens noms).
 - **0.5.1** : vignettes de 480 px dans la revue (`Attente.vignette`), nouvel essai automatique ; image cassée signalée par Julien sur iPhone.
 - **0.5.0** : `/externe/noms` (jeton `CHAMBRE_NOIRE_JETON_MILLESIME`) lu par Millésime 2.9.0 ; tuile Millésime dans Connexion.
 - Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :

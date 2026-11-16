@@ -8,7 +8,11 @@ services:
       - immich-server
     environment:
       - TZ=${TZ}
-      - CHAMBRE_NOIRE_PASSWORD=${CARNET_PASSWORD}                 # mot de passe commun des applis, obligatoire
+      # 0.6.0 : variables communes de la maison (module app/maison.py) ; les anciennes restent lues en repli
+      - MAISON_PASSWORD=${MAISON_PASSWORD:-}                      # mot de passe commun des applis (repli : CHAMBRE_NOIRE_PASSWORD)
+      - MAISON_JETON=${MAISON_JETON:-}                            # jeton commun : ouvre /externe/noms à Millésime
+      - MAISON_LECTURE_SEULE=${MAISON_LECTURE_SEULE:-}            # « oui » : aucune appli n'écrit ; CHAMBRE_NOIRE_LECTURE_SEULE l'emporte si posée
+      - CHAMBRE_NOIRE_PASSWORD=${CARNET_PASSWORD}                 # ancien nom, en repli tant que MAISON_PASSWORD n'est pas dans la stack
       - CHAMBRE_NOIRE_IMMICH_URL=http://immich_server:2283
       - CHAMBRE_NOIRE_IMMICH_CLE=${CHAMBRE_NOIRE_IMMICH_CLE}       # clé d'API Immich dédiée
       - CHAMBRE_NOIRE_ML_URL=http://immich_machine_learning:3003
@@ -16,8 +20,8 @@ services:
       # ces deux variables ne donnent que la valeur de départ (facultatives).
       - CHAMBRE_NOIRE_LIBELLE=${CHAMBRE_NOIRE_LIBELLE:-}
       - CHAMBRE_NOIRE_ALBUM_NON_DATEES=${CHAMBRE_NOIRE_ALBUM_NON_DATEES:-}
-      - CHAMBRE_NOIRE_JETON_MILLESIME=${CHAMBRE_NOIRE_JETON_MILLESIME:-}   # 0.5.0 : Millésime lit /externe/noms ; vide : adresse fermée
-      - CHAMBRE_NOIRE_LECTURE_SEULE=${CHAMBRE_NOIRE_LECTURE_SEULE:-}   # « oui » : rien n'est écrit dans Immich
+      - CHAMBRE_NOIRE_JETON_MILLESIME=${CHAMBRE_NOIRE_JETON_MILLESIME:-}   # ancien jeton de Millésime, accepté en plus de MAISON_JETON
+      - CHAMBRE_NOIRE_LECTURE_SEULE=${CHAMBRE_NOIRE_LECTURE_SEULE:-}   # « oui » ou « non » : force Chambre noire seule
     ports:
       - "${PORT_CHAMBRE_NOIRE:-8100}:8100"         # réseau local ; caméra par HTTPS (tailscale serve)
     volumes:

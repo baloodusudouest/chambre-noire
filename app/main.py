@@ -14,13 +14,12 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-import hmac
 import time
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from . import __version__
+from . import __version__, maison
 from .attente import Attente, ErreurPrise
 from .auth import COMMUN, DUREE, Sessions
 from .config import APPLI, Config, charger
@@ -72,7 +71,7 @@ async def garde(request: Request, appel):
 
 
 class LectureSeule(Exception):
-    """Écriture refusée : l'appli tourne en lecture seule (CHAMBRE_NOIRE_LECTURE_SEULE)."""
+    """Écriture refusée : l'appli tourne en lecture seule (MAISON_LECTURE_SEULE, ou CHAMBRE_NOIRE_LECTURE_SEULE qui l'emporte)."""
 
 
 def exiger_ecriture(quoi: str = "") -> None:
@@ -97,16 +96,23 @@ def sante():
             "en_attente": ETAT["attente"].en_attente(), "envoyees": ETAT["attente"].envoyees()}
 
 
+def jetons_millesime() -> tuple[str, ...]:
+    """0.6.0 : jetons acceptés sur /externe/noms : l'ancien jeton propre (CHAMBRE_NOIRE_JETON_MILLESIME) et le jeton
+    commun de la maison (MAISON_JETON, MAISON_JETON_ANCIEN). Aucun : adresse fermée."""
+    return tuple(j for j in (ETAT["cfg"].jeton_millesime, *maison.jetons()) if j)
+
+
 @app.get("/externe/noms")
 def noms_pour_millesime(request: Request):
     """0.5.0 : Millésime lit ici les noms qu'utilisent les envois (libellé, album et tag des non datées),
-    pour suivre le réglage fait dans Chambre noire. Jeton CHAMBRE_NOIRE_JETON_MILLESIME ; vide : adresse fermée.
-    N'écrit rien, sauf l'heure de la lecture (montrée dans Connexion)."""
-    jeton = ETAT["cfg"].jeton_millesime
-    if not jeton:
-        raise HTTPException(404, "Adresse fermée : CHAMBRE_NOIRE_JETON_MILLESIME est vide.")
-    propose = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-    if not hmac.compare_digest(propose.encode(), jeton.encode()):
+    pour suivre le réglage fait dans Chambre noire. Jeton CHAMBRE_NOIRE_JETON_MILLESIME ou, depuis 0.6.0,
+    MAISON_JETON ; aucun des deux : adresse fermée. N'écrit rien, sauf l'heure de la lecture (montrée dans Connexion)."""
+    acceptes = jetons_millesime()
+    if not acceptes:
+        raise HTTPException(404, "Adresse fermée : ni MAISON_JETON ni CHAMBRE_NOIRE_JETON_MILLESIME ne sont posés.")
+    # « Authorization: Bearer … » (ou X-Maison-Jeton) ; l'en-tête historique acceptait aussi le jeton sans « Bearer ».
+    propose = maison.jeton_propose(request.headers) or request.headers.get("authorization", "").strip()
+    if not maison.jeton_valide(propose, acceptes):      # temps constant
         raise HTTPException(401, "Jeton refusé.")
     libelle, nd = noms_actuels()
     ETAT["attente"].regler("millesime_vu", time.strftime("%Y-%m-%dT%H:%M:%S"))
@@ -127,11 +133,18 @@ def noms_actuels() -> tuple[str, str]:
     return (c.libelle if libelle is None else libelle), (c.album_non_datees if nd is None else nd)
 
 
+def _origine_lecture_seule() -> str:
+    """0.6.0 : « maison » (toute la maison, MAISON_LECTURE_SEULE) ou « appli » (CHAMBRE_NOIRE_LECTURE_SEULE) ; « » : écriture permise."""
+    c = ETAT["cfg"]
+    return (c.origine_lecture_seule or "appli") if c.lecture_seule else ""
+
+
 @app.get("/api/session")
 def session(request: Request):
     s = ETAT["sessions"]
     connecte = s.connecte(request.cookies)
-    sortie = {"connecte": connecte, "version": __version__, "lecture_seule": ETAT["cfg"].lecture_seule}
+    sortie = {"connecte": connecte, "version": __version__, "lecture_seule": ETAT["cfg"].lecture_seule,
+              "origine_lecture_seule": _origine_lecture_seule()}
     if connecte:   # le libellé (nom d'album et de tag) n'est donné qu'une fois connecté
         libelle, nd = noms_actuels()
         sortie.update(libelle=libelle, album_non_datees=nd)
@@ -170,8 +183,9 @@ def deconnexion():
 def services():
     """Lit l'état d'Immich (version, clé, permissions) et du service d'apprentissage. N'écrit rien."""
     return {"immich": asdict(ETAT["immich"].etat()), "apprentissage": ETAT["apprentissage"].etat(),
-            "lecture_seule": ETAT["cfg"].lecture_seule, "libelle": noms_actuels()[0],
-            "millesime": {"ouvert": bool(ETAT["cfg"].jeton_millesime), "vu": ETAT["attente"].reglage("millesime_vu")}}
+            "lecture_seule": ETAT["cfg"].lecture_seule, "origine_lecture_seule": _origine_lecture_seule(),
+            "libelle": noms_actuels()[0],
+            "millesime": {"ouvert": bool(jetons_millesime()), "vu": ETAT["attente"].reglage("millesime_vu")}}
 
 
 # ================================================================ zone d'attente (étape 2)

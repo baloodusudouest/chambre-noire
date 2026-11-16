@@ -23,7 +23,7 @@
   ]
 
   let connecte = $state(null) // null : on ne sait pas encore
-  let session = $state({ version: '', lecture_seule: false, libelle: '', album_non_datees: '' })
+  let session = $state({ version: '', lecture_seule: false, origine_lecture_seule: '', libelle: '', album_non_datees: '' })
   let page = $state(lirePage())
   let file = $state({ surIphone: 0, connexion: false })
   abonner((e) => { file = e; if (e.connexion && connecte) connecte = false })
@@ -88,7 +88,7 @@
     >
       {#if session.lecture_seule}
         <p class="mb-4 rounded-xl border border-primary/50 px-4 py-2 text-sm" role="status">
-          Mode lecture seule : Chambre noire lit tout mais n'écrit rien dans Immich (CHAMBRE_NOIRE_LECTURE_SEULE).
+          Mode lecture seule{session.origine_lecture_seule === 'maison' ? ' pour toute la maison' : ''} : Chambre noire lit tout mais n'écrit rien dans Immich ({session.origine_lecture_seule === 'maison' ? 'MAISON_LECTURE_SEULE' : 'CHAMBRE_NOIRE_LECTURE_SEULE'}).
         </p>
       {/if}
       {#key page}

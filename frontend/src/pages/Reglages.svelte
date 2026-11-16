@@ -96,9 +96,12 @@
 <section class="mt-4 rounded-2xl border bg-card p-5">
   <h2 class="text-lg font-semibold">Écriture dans Immich</h2>
   <p class="mt-1 text-sm text-muted-foreground">
+    <!-- 0.6.0 : la lecture seule vient de toute la maison (MAISON_LECTURE_SEULE) ou de cette appli seule -->
     {session.lecture_seule
-      ? 'Lecture seule : Chambre noire lit tout mais n\'écrit rien dans Immich. À retirer dans la stack (CHAMBRE_NOIRE_LECTURE_SEULE) quand le premier jour s\'est bien passé.'
-      : 'Chambre noire peut écrire dans Immich. Pour le premier jour d\'une nouvelle version : CHAMBRE_NOIRE_LECTURE_SEULE=oui dans la stack.'}
+      ? session.origine_lecture_seule === 'maison'
+        ? 'Lecture seule pour toute la maison (MAISON_LECTURE_SEULE) : Chambre noire lit tout mais n\'écrit rien dans Immich. Pour écrire ici seulement : CHAMBRE_NOIRE_LECTURE_SEULE=non dans la stack.'
+        : 'Lecture seule pour cette appli (CHAMBRE_NOIRE_LECTURE_SEULE) : Chambre noire lit tout mais n\'écrit rien dans Immich. À retirer dans la stack quand le premier jour s\'est bien passé.'
+      : 'Chambre noire peut écrire dans Immich. Pour le premier jour d\'une nouvelle version : CHAMBRE_NOIRE_LECTURE_SEULE=oui dans la stack (MAISON_LECTURE_SEULE=oui : toute la maison).'}
   </p>
 </section>
 
