@@ -1,5 +1,8 @@
 # Journal des versions
 
+## 0.7.3 — 17 novembre 2026 (corrections de l'audit, suite)
+- Photo déjà connue d'Immich (renvoyée après Annuler) : sa sortie de la corbeille est maintenant contrôlée. Si Immich la refuse, la prise reste en erreur (à relancer) au lieu d'être notée envoyée alors que la photo restait dans la corbeille, purgée après 30 jours.
+
 ## 0.7.2 — 17 novembre 2026 (connexion plus sûre)
 - **Connexion plus sûre** (audit du 17/11/2026, même correctif dans toutes les applis maison) :
   - un cookie portant un caractère non ASCII donnait une erreur 500 sur toute l'API ; il est maintenant simplement refusé ;

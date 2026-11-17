@@ -76,7 +76,8 @@ class ImmichEcriture:
 
     def restaurer(self, ids: list[str]) -> None:
         """Photo déjà connue d'Immich (envoi annulé puis refait) : la sortir de la corbeille si elle y est."""
-        self._c.post("/api/trash/restore/assets", json={"ids": ids})
+        # 0.7.3 : réponse contrôlée ; sinon une photo restée dans la corbeille était notée envoyée (et purgée après 30 jours)
+        self._ok(self._c.post("/api/trash/restore/assets", json={"ids": ids}))
 
     def album(self, nom: str, ids: list[str]) -> str:
         albums = self._ok(self._c.get("/api/albums")).json()
