@@ -61,6 +61,15 @@ class Attente:
         self._db.commit()
 
     # ------------------------------------------------------------------ réception
+    def reprendre_envois_interrompus(self) -> int:
+        """0.7.1 : une section restée « envoi » vient d'un redémarrage pendant l'envoi : elle redevient
+        « incomplète », donc relançable (les photos déjà envoyées ne sont pas renvoyées)."""
+        with self._verrou:
+            n = self._db.execute("UPDATE section SET statut='incomplete', progression=NULL, "
+                                 "erreur='Envoi interrompu par un redémarrage : relancer' WHERE statut='envoi'").rowcount
+            self._db.commit()
+        return n
+
     def recevoir(self, meta: dict, rendu: bytes, source: bytes | None) -> dict:
         pid, sid = str(meta.get("id", "")), str(meta.get("section", ""))
         if not ID.match(pid) or not ID.match(sid):

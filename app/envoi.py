@@ -142,16 +142,25 @@ class Envoyeur:
         elif not non_datee and not (1850 <= int(annee) <= datetime.now().year and 0 <= int(mois) <= 12):
             raise ErreurEnvoi("Date invalide.")
         album, tag = noms(libelle, int(annee or 1900), int(mois or 0), bool(non_datee), album_non_datees)
-        self.attente.maj_section(sid, statut="envoi", annee=annee, mois=mois, non_datee=int(bool(non_datee)),
-                                 album=album, tag=tag, erreur=None, progression="Préparation…")
         fil = threading.Thread(target=self._envoyer, args=(sid,), daemon=True)
-        with self._verrou:
+        with self._verrou:                    # 0.7.1 : un double appui ne lance pas deux envois
+            if (self.attente.section(sid) or {}).get("statut") == "envoi":
+                raise ErreurEnvoi("Envoi déjà en cours.")
+            self.attente.maj_section(sid, statut="envoi", annee=annee, mois=mois, non_datee=int(bool(non_datee)),
+                                     album=album, tag=tag, erreur=None, progression="Préparation…")
             self._fils[sid] = fil
         fil.start()
         if attendre:
             fil.join()
 
     def _envoyer(self, sid: str) -> None:
+        try:
+            self._envoyer_les_prises(sid)
+        except Exception as e:  # noqa: BLE001 — 0.7.1 : une erreur imprévue rend la section relançable
+            self.attente.maj_section(sid, statut="incomplete", progression=None,
+                                     erreur=f"Envoi interrompu : {type(e).__name__} : {e}"[:300])
+
+    def _envoyer_les_prises(self, sid: str) -> None:
         s = self.attente.section(sid)
         annee, mois, nd, album, tag = s["annee"], s["mois"] or 0, bool(s["non_datee"]), s["album"], s["tag"]
         prises = self.attente.prises_a_envoyer(sid)

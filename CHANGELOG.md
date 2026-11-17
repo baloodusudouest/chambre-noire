@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 0.7.1 — 17 novembre 2026 (corrections de l'audit)
+- **Bug** : un redémarrage du conteneur pendant un envoi laissait la section figée « envoi en cours », sans bouton pour relancer, et l'API refusait tout nouvel envoi. Au démarrage, une telle section redevient « incomplète » (« Envoi interrompu par un redémarrage : relancer ») ; les photos déjà envoyées ne sont pas renvoyées. Une erreur imprévue pendant l'envoi fait de même au lieu de laisser la section bloquée.
+- Un double appui sur « Envoyer » ne lance plus deux envois.
+- Intégration continue : l'image n'est plus publiée si les tests échouent (`docker.yml` appelle `tests.yml` avant de construire).
+
 ## 0.7.0 — 16 novembre 2026
 - **Les réglages vivent dans l'appli.** Le libellé des albums et des tags et l'album des non datées (Réglages › Noms dans Immich, depuis 0.4.1) ne sont plus jamais relus dans la stack : au premier démarrage de la 0.7.0, s'ils ne sont pas déjà dans la base, ils sont repris une fois de `CHAMBRE_NOIRE_LIBELLE` et `CHAMBRE_NOIRE_ALBUM_NON_DATEES` (une ligne au journal par réglage repris), puis seul l'écran Réglages fait foi. `PUT /api/reglages` ne change que les clés envoyées ; une valeur du mauvais type, ou refusée, répond 400 avec un message clair (avant : 422).
 - **Sauvegarde par l'Anneau** : nouvelle porte `GET /externe/sauvegarde` (jeton commun `MAISON_JETON` ; vide : fermée). Elle rend seulement la version et les deux réglages, jamais de variable, de clé, de chemin ni de secret (contrat de sauvegarde 1).

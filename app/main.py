@@ -64,6 +64,7 @@ async def cycle(app: FastAPI):
                 apprentissage=ApprentissageImmich(cfg.ml_url, transport))
     ETAT["envoyeur"] = Envoyeur(ETAT["attente"], ImmichEcriture(cfg.immich_url, cfg.immich_cle, transport), noms_actuels)
     reprendre_reglages(ETAT["attente"], cfg)
+    ETAT["attente"].reprendre_envois_interrompus()          # 0.7.1 : section figée « envoi » après un redémarrage
     yield
 
 

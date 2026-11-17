@@ -221,3 +221,27 @@ def test_reglage_garde_apres_redemarrage(tmp_path):
     with c2:
         connecter(c2)
         assert c2.get("/api/reglages").json()["libelle"] == "Valeur de l'appli"
+
+
+def test_envoi_interrompu_par_un_redemarrage_redevient_relancable(tmp_path):
+    """0.7.1 (audit du 17/11/2026) : une section figée « envoi » est rendue relançable au démarrage."""
+    from app.attente import Attente
+    a = Attente(tmp_path)
+    a._db.execute("INSERT INTO section(id, mode, creee_le, statut) VALUES ('s1', 'tirage', '2026-11-17', 'envoi')")
+    a._db.commit()
+    assert Attente(tmp_path).reprendre_envois_interrompus() == 1
+    s = Attente(tmp_path).section("s1")
+    assert s["statut"] == "incomplete" and "redémarrage" in s["erreur"]
+
+
+def test_erreur_imprevue_pendant_l_envoi_rend_la_section_relancable(tmp_path):
+    from app.attente import Attente
+    from app.envoi import Envoyeur
+    a = Attente(tmp_path)
+    a._db.execute("INSERT INTO section(id, mode, creee_le, statut) VALUES ('s2', 'tirage', '2026-11-17', 'envoi')")
+    a._db.commit()
+    e = Envoyeur(a, None, lambda: ("Scans", ""))
+    e._envoyer_les_prises = lambda sid: (_ for _ in ()).throw(RuntimeError("base occupée"))
+    e._envoyer("s2")
+    s = a.section("s2")
+    assert s["statut"] == "incomplete" and "RuntimeError" in s["erreur"]
