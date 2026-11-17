@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 0.7.2 — 17 novembre 2026 (connexion plus sûre)
+- **Connexion plus sûre** (audit du 17/11/2026, même correctif dans toutes les applis maison) :
+  - un cookie portant un caractère non ASCII donnait une erreur 500 sur toute l'API ; il est maintenant simplement refusé ;
+  - les clés qui signent les cookies (celui de l'appli et le cookie commun `maison_session` posé par l'Anneau) sont tirées du mot de passe par PBKDF2 : un cookie capté sur le réseau local ne permet plus de chercher le mot de passe à grande vitesse. **Toutes les applis doivent être à jour ensemble** ; une seule reconnexion est demandée après la mise à jour ;
+  - des essais de mot de passe lancés en parallèle ne contournent plus le délai : au-delà de 30 essais en 5 minutes, tout est refusé sans comparer.
+- Module commun `maison.py` (socle 0.7.0) : l'annuaire de l'Anneau est relu 30 s après un échec (avant : 10 min sans adresses après un redémarrage de la stack) ; un réglage `nan` ou infini est refusé ; un `reglages.json` abîmé est mis de côté (`.corrompu`) au lieu d'être écrasé.
+
 ## 0.7.1 — 17 novembre 2026 (corrections de l'audit)
 - **Bug** : un redémarrage du conteneur pendant un envoi laissait la section figée « envoi en cours », sans bouton pour relancer, et l'API refusait tout nouvel envoi. Au démarrage, une telle section redevient « incomplète » (« Envoi interrompu par un redémarrage : relancer ») ; les photos déjà envoyées ne sont pas renvoyées. Une erreur imprévue pendant l'envoi fait de même au lieu de laisser la section bloquée.
 - Un double appui sur « Envoyer » ne lance plus deux envois.
