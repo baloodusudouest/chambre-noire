@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 import httpx
 from PIL import Image
 
+from . import maison
 from .attente import Attente
 from .metadonnees import PARIS, date_prise, decalage, injecter
 
@@ -156,7 +157,8 @@ class Envoyeur:
 
     def _envoyer(self, sid: str) -> None:
         try:
-            self._envoyer_les_prises(sid)
+            with maison.TACHES.tour("envoi-immich"):        # 0.8.0 : tâche à la demande suivie (/health)
+                self._envoyer_les_prises(sid)
         except Exception as e:  # noqa: BLE001 — 0.7.1 : une erreur imprévue rend la section relançable
             self.attente.maj_section(sid, statut="incomplete", progression=None,
                                      erreur=f"Envoi interrompu : {type(e).__name__} : {e}"[:300])

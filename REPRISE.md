@@ -7,7 +7,7 @@ Réécriture sur le socle de « Scan Immich » (page unique servie par nginx, en
 numériser à l'iPhone les tirages papier d'albums familiaux et les envoyer dans Immich, datés, tagués, rangés.
 Dossier complet (besoin, technique, parcours, design, données, plan, écarts, avis du conseil) : `docs/dossier.md`.
 
-## État (16/11/2026)
+## État (18/11/2026)
 - **0.1.0** : squelette, déployé et vérifié sur le NAS (Connexion verte avec la vraie clé).
 - **0.2.0** : zone d'attente (NAS : réception idempotente, SQLite, fichiers dans /data/attente ; iPhone : file
   d'envoi avec accusé de réception) et écran À traiter. 26 tests verts en local. Pas encore essayée sur le NAS.
@@ -49,6 +49,12 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
   Choix de Julien (18/11/2026) : la vider souvent plutôt que la sauvegarder. **0.7.6** : purge automatique des fichiers
   déjà envoyés après `purge_jours` jours (réglage, 30 par défaut), réception refusée (507) sous 1 Go libre ; plafond de
   64 Mpx lu dans l'en-tête. Jamais essayé sur la vraie installation.
+- **0.8.0** (18/11/2026) : santé des tâches de fond (socle 0.9.0, `app/maison.py` copie signée non retouchée).
+  Tâches dans `maison.TACHES` : `purge` (régulière 21 600 s, `boucle_purge`), `envoi-immich` (à la demande, `Envoyeur._envoyer`),
+  `copie-des-bases` (régulière 86 400 s, `maison.planifier_copie` lancée dans `cycle`, annulée à l'arrêt). Copie de
+  `chambre-noire.db` à 02:00 heure de Paris dans `/data/copies` (`chambre-noire-derniere.db`, `copie.json`).
+  `/health` ajoute `version_socle`, `taches`, `copie_base` (messages seulement avec `MAISON_JETON` ou une session). Un seul worker uvicorn.
+  Tests : `tests/test_sante.py`. Jamais essayé sur la vraie installation (ni la copie de nuit, ni une restauration depuis la copie).
 
 ## Prochaine étape (plan revu par le conseil)
 1. ~~Squelette~~ (fait, vérifié sur le NAS).

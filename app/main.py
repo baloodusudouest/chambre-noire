@@ -9,6 +9,9 @@
 /externe/sauvegarde (jeton commun, lue par l'Anneau), /api/restaurer ; anciens noms de variables retirés.
 0.7.6 (audit, M33 et M35) : purge des fichiers déjà envoyés après « purge_jours » jours, réception refusée sous 1 Go
 libre ; taille et pixels contrôlés à la réception, avant de lire l'image en entier.
+0.8.0 (santé des tâches de fond, socle 0.9.0) : tâches suivies dans maison.TACHES (« purge » toutes les 6 h,
+« envoi-immich » à la demande), copie cohérente de chambre-noire.db chaque nuit à 02:00 (heure de Paris) dans
+/data/copies ; /health ajoute version_socle, taches et copie_base. Un seul worker uvicorn (registre en mémoire).
 """
 from __future__ import annotations
 
@@ -42,6 +45,9 @@ REGLAGES = ("libelle", "album_non_datees", "purge_jours")
 DEFAUTS = {"purge_jours": 30}
 PURGE_MAX = 365
 PURGE_TOUTES = 6 * 3600                  # la purge passe au démarrage puis toutes les 6 heures
+# 0.8.0 (socle 0.9.0) : noms des tâches suivies dans maison.TACHES (lus par /health et la veille de l'Anneau)
+TACHE_PURGE = "purge"                    # régulière, toutes les PURGE_TOUTES secondes
+TACHE_ENVOI = "envoi-immich"             # à la demande (bouton Envoyer d'une section)
 # Anciennes variables de la stack, lues UNE fois (premier démarrage) pour reprendre la valeur, puis plus jamais.
 REGLAGES_VARIABLES = {"libelle": "CHAMBRE_NOIRE_LIBELLE", "album_non_datees": "CHAMBRE_NOIRE_ALBUM_NON_DATEES"}
 # Clés à ne jamais sortir de l'appli, en plus de ce que maison.est_secret() écarte déjà. « millesime_vu » est dans
@@ -72,11 +78,17 @@ async def cycle(app: FastAPI):
     ETAT["envoyeur"] = Envoyeur(ETAT["attente"], ImmichEcriture(cfg.immich_url, cfg.immich_cle, transport), noms_actuels)
     reprendre_reglages(ETAT["attente"], cfg)
     ETAT["attente"].reprendre_envois_interrompus()          # 0.7.1 : section figée « envoi » après un redémarrage
-    tache = asyncio.create_task(boucle_purge())
+    maison.TACHES.declarer(TACHE_PURGE, PURGE_TOUTES)
+    maison.TACHES.declarer(TACHE_ENVOI, type="demande")
+    taches = [asyncio.create_task(boucle_purge()),
+              # 0.8.0 : copie cohérente de la base chaque nuit (heure de Paris), dans /data/copies
+              asyncio.create_task(maison.planifier_copie(APPLI, [cfg.data / "chambre-noire.db"], cfg.data / "copies",
+                                                         maison.HEURES_COPIE[APPLI]))]
     try:
         yield
     finally:
-        tache.cancel()
+        for tache in taches:
+            tache.cancel()
 
 
 def purger() -> int:
@@ -87,7 +99,8 @@ def purger() -> int:
 async def boucle_purge() -> None:
     while True:
         try:
-            await asyncio.to_thread(purger)
+            async with maison.TACHES.tour_async(TACHE_PURGE):     # 0.8.0 : un tour suivi (réussite ou erreur)
+                await asyncio.to_thread(purger)
         except Exception:  # noqa: BLE001 — une purge ratée n'arrête pas l'appli ; nouvel essai au tour suivant
             pass
         await asyncio.sleep(PURGE_TOUTES)
@@ -157,11 +170,14 @@ async def _lecture_seule(_: Request, exc: LectureSeule):
 # ================================================================ public
 
 @app.get("/health")
-def sante():
+def sante(request: Request):
     # Pour la tuile de l'Anneau : des nombres, jamais de nom. Prises en attente et photos envoyées
     # arrivent avec la zone d'attente (étape 2) et l'envoi (étape 4).
+    # 0.8.0 : + version_socle, taches, copie_base (messages d'erreur seulement avec le jeton commun ou une session).
     return {"ok": True, "appli": APPLI, "version": __version__,
-            "en_attente": ETAT["attente"].en_attente(), "envoyees": ETAT["attente"].envoyees()}
+            "en_attente": ETAT["attente"].en_attente(), "envoyees": ETAT["attente"].envoyees(),
+            **maison.sante(request, jeton_commun=maison.jetons(),
+                           session_ok=ETAT["sessions"].connecte(request.cookies))}
 
 
 @app.get("/externe/noms")

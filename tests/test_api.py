@@ -50,7 +50,7 @@ def test_health_publique_sans_nom(tmp_path):
         r = c.get("/health").json()
     from app import __version__
     assert r["ok"] and r["appli"] == "chambre-noire" and r["version"] == __version__
-    assert set(r) == {"ok", "appli", "version", "en_attente", "envoyees"}
+    assert set(r) == {"ok", "appli", "version", "en_attente", "envoyees", "version_socle", "taches", "copie_base"}
 
 
 def test_api_fermee_sans_session(tmp_path):

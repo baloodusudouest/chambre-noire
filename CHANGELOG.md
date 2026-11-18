@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 0.8.0 — 18 novembre 2026 (santé des tâches de fond)
+- **Tâches suivies** (module commun `maison.TACHES`, lues dans `/health` et par la veille de l'Anneau) : `purge` (régulière, toutes les 6 heures : 21 600 s), `envoi-immich` (à la demande : bouton Envoyer d'une section ; « erreur » si l'envoi s'arrête sur une erreur imprévue), `copie-des-bases` (régulière, 86 400 s). Le comportement de l'appli ne change pas (une purge ratée réessaie toujours au tour suivant, un envoi interrompu rend toujours la section relançable).
+- **Copie des bases** : chaque nuit à 02:00 (heure de Paris, quel que soit le fuseau du conteneur), copie cohérente de `chambre-noire.db` (API de sauvegarde de SQLite, contrôle d'intégrité) dans `/data/copies/chambre-noire-derniere.db`, écrasée chaque nuit (Hyper Backup tient l'historique) ; résultat dans `/data/copies/copie.json`.
+- **`/health`** : ajoute `version_socle`, `taches` et `copie_base` ; rien d'existant ne change. Les messages d'erreur des tâches n'apparaissent qu'avec le jeton commun (`Authorization: Bearer MAISON_JETON`) ou une session valide.
+- `maison.py` du socle 0.9.1. Un seul worker uvicorn (le registre des tâches vit en mémoire).
+
 ## 0.7.6 — 18 novembre 2026 (constats moyens de l'audit)
 - **M33** : les fichiers des photos déjà envoyées dans Immich sont effacés de la zone d'attente après `purge_jours` jours (nouveau réglage d'usage, 30 par défaut, de 1 à 365, dans Réglages › Zone d'attente, sauvegardé par l'Anneau) ; la purge passe au démarrage puis toutes les 6 heures. Le NAS refuse une nouvelle prise s'il resterait moins de 1 Go libre (réponse 507 : la prise attend sur l'iPhone et repart plus tard). Annuler un envoi dont les fichiers sont déjà purgés met toujours les photos à la corbeille d'Immich, mais ne les ramène plus dans « À traiter ».
 - **M35** : à la réception, la taille de chaque fichier est contrôlée avant de le lire en entier (taille annoncée, lecture plafonnée à 30 Mo, requête trop lourde refusée d'emblée) et ses pixels sont lus dans l'en-tête du JPEG, sans le décoder : au-delà de 64 millions de pixels, la prise est refusée.
