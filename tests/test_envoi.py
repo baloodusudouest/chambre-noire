@@ -195,7 +195,7 @@ def test_libelle_regle_dans_l_appli(tmp_path):
     c, _ = client(tmp_path, faux, libelle="")
     with c:
         connecter(c)
-        assert c.get("/api/reglages").json() == {"libelle": "", "album_non_datees": ""}
+        assert c.get("/api/reglages").json() == {"libelle": "", "album_non_datees": "", "purge_jours": 30}
         assert c.put("/api/reglages", json={"libelle": "Avec/barre"}).status_code == 400
         assert c.put("/api/reglages", json={"libelle": ""}).status_code == 400
         r = c.put("/api/reglages", json={"libelle": "Numérisation Réglée", "album_non_datees": "Sans date"})

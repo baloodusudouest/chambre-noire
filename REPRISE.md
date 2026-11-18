@@ -45,8 +45,10 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
   - Jamais essayé sur la vraie installation (ni la reprise, ni la sauvegarde lue par l'Anneau, ni la restauration).
 - **0.5.1** : vignettes de 480 px dans la revue (`Attente.vignette`), nouvel essai automatique ; image cassée signalée par Julien sur iPhone.
 - **0.5.0** : `/externe/noms` (jeton `CHAMBRE_NOIRE_JETON_MILLESIME`) lu par Millésime 2.9.0 ; tuile Millésime dans Connexion.
-- Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé :
-  à ajouter à la sauvegarde (avis du conseil) ou à vider souvent en envoyant.
+- Sauvegarde : la zone d'attente est dans ${DOCKER_ROOT}/chambre-noire, hors du dossier personnel sauvegardé.
+  Choix de Julien (18/11/2026) : la vider souvent plutôt que la sauvegarder. **0.7.6** : purge automatique des fichiers
+  déjà envoyés après `purge_jours` jours (réglage, 30 par défaut), réception refusée (507) sous 1 Go libre ; plafond de
+  64 Mpx lu dans l'en-tête. Jamais essayé sur la vraie installation.
 
 ## Prochaine étape (plan revu par le conseil)
 1. ~~Squelette~~ (fait, vérifié sur le NAS).

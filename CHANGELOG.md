@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 0.7.6 — 18 novembre 2026 (constats moyens de l'audit)
+- **M33** : les fichiers des photos déjà envoyées dans Immich sont effacés de la zone d'attente après `purge_jours` jours (nouveau réglage d'usage, 30 par défaut, de 1 à 365, dans Réglages › Zone d'attente, sauvegardé par l'Anneau) ; la purge passe au démarrage puis toutes les 6 heures. Le NAS refuse une nouvelle prise s'il resterait moins de 1 Go libre (réponse 507 : la prise attend sur l'iPhone et repart plus tard). Annuler un envoi dont les fichiers sont déjà purgés met toujours les photos à la corbeille d'Immich, mais ne les ramène plus dans « À traiter ».
+- **M35** : à la réception, la taille de chaque fichier est contrôlée avant de le lire en entier (taille annoncée, lecture plafonnée à 30 Mo, requête trop lourde refusée d'emblée) et ses pixels sont lus dans l'en-tête du JPEG, sans le décoder : au-delà de 64 millions de pixels, la prise est refusée.
+- `maison.py` du socle 0.8.2 (audit M3) : réglages secrets reconnus par mots, adresse avec identifiant écartée, champ `ecartes` dans la sauvegarde (noms seulement).
+
 ## 0.7.5 — 18 novembre 2026 (cookies Secure)
 - **Cookies `Secure` en https** (audit du 17/11/2026, même correctif dans toutes les applis maison) : ouverte en https (directement, derrière Tailscale Serve qui le dit par `X-Forwarded-Proto`, ou d'après l'origine de la page), l'appli pose ses cookies de session avec l'attribut `Secure` : ils ne partent jamais en clair. En http (adresse locale), rien ne change.
 - `entrypoint.sh` refuse de lancer l'appli en root quand `/data` appartient à root (dossier créé par Docker) et dit le remède ; dépannage seulement : `MAISON_ROOT_ACCEPTE=oui`.

@@ -7,6 +7,8 @@
 /api/journal et Annuler (limité aux photos du journal). Seules routes qui écrivent dans Immich.
 0.7.0 (réglages et sauvegarde) : réglages d'usage dans l'appli seulement (variables reprises une fois),
 /externe/sauvegarde (jeton commun, lue par l'Anneau), /api/restaurer ; anciens noms de variables retirés.
+0.7.6 (audit, M33 et M35) : purge des fichiers déjà envoyés après « purge_jours » jours, réception refusée sous 1 Go
+libre ; taille et pixels contrôlés à la réception, avant de lire l'image en entier.
 """
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.responses import FileResponse, JSONResponse
 
 from . import __version__, maison
-from .attente import Attente, ErreurPrise
+from .attente import TAILLE_MAX, Attente, ErreurEspace, ErreurPrise
 from .auth import COMMUN, DUREE, Sessions, en_https
 from .config import APPLI, Config, charger
 from .envoi import Envoyeur, ErreurEnvoi, ImmichEcriture, noms
@@ -34,7 +36,12 @@ PUBLIQUES = ("/api/connexion", "/api/session")
 
 # ---------------------------------------------------------------- réglages d'usage (0.7.0, contrat de sauvegarde 1)
 # Gardés dans la table « reglage » de la base de l'appli (depuis 0.4.1) ; tous des textes.
-REGLAGES = ("libelle", "album_non_datees")
+REGLAGES = ("libelle", "album_non_datees", "purge_jours")
+# 0.7.6 (M33) : réglages sans ancienne variable, avec leur valeur de départ. « purge_jours » : les fichiers d'une prise
+# envoyée dans Immich sont effacés de la zone d'attente après ce nombre de jours (entier, 1 à 365).
+DEFAUTS = {"purge_jours": 30}
+PURGE_MAX = 365
+PURGE_TOUTES = 6 * 3600                  # la purge passe au démarrage puis toutes les 6 heures
 # Anciennes variables de la stack, lues UNE fois (premier démarrage) pour reprendre la valeur, puis plus jamais.
 REGLAGES_VARIABLES = {"libelle": "CHAMBRE_NOIRE_LIBELLE", "album_non_datees": "CHAMBRE_NOIRE_ALBUM_NON_DATEES"}
 # Clés à ne jamais sortir de l'appli, en plus de ce que maison.est_secret() écarte déjà. « millesime_vu » est dans
@@ -65,7 +72,25 @@ async def cycle(app: FastAPI):
     ETAT["envoyeur"] = Envoyeur(ETAT["attente"], ImmichEcriture(cfg.immich_url, cfg.immich_cle, transport), noms_actuels)
     reprendre_reglages(ETAT["attente"], cfg)
     ETAT["attente"].reprendre_envois_interrompus()          # 0.7.1 : section figée « envoi » après un redémarrage
-    yield
+    tache = asyncio.create_task(boucle_purge())
+    try:
+        yield
+    finally:
+        tache.cancel()
+
+
+def purger() -> int:
+    """0.7.6 (M33) : efface les fichiers des prises envoyées depuis plus de « purge_jours » jours."""
+    return ETAT["attente"].purger(reglages_actuels()["purge_jours"])
+
+
+async def boucle_purge() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(purger)
+        except Exception:  # noqa: BLE001 — une purge ratée n'arrête pas l'appli ; nouvel essai au tour suivant
+            pass
+        await asyncio.sleep(PURGE_TOUTES)
 
 
 def reprendre_reglages(attente: Attente, cfg: Config) -> list[str]:
@@ -75,6 +100,9 @@ def reprendre_reglages(attente: Attente, cfg: Config) -> list[str]:
     repris = []
     for k in REGLAGES:
         if attente.reglage(k) is not None:
+            continue
+        if k in DEFAUTS:                     # pas d'ancienne variable : valeur de départ
+            attente.regler(k, str(DEFAUTS[k]))
             continue
         valeur = str(getattr(cfg, k) or "").strip()
         attente.regler(k, valeur)
@@ -96,6 +124,14 @@ async def garde(request: Request, appel):
     if chemin.startswith("/api/"):
         if chemin not in PUBLIQUES and not ETAT["sessions"].connecte(request.cookies):
             return JSONResponse({"detail": "Connexion nécessaire."}, status_code=401)
+        # 0.7.6 (M35) : une prise annoncée plus lourde que deux fichiers au plafond est refusée avant d'être reçue
+        if chemin == "/api/prises" and request.method == "POST":
+            try:
+                annonce = int(request.headers.get("content-length") or 0)
+            except ValueError:
+                annonce = 0
+            if annonce > 2 * TAILLE_MAX + 1024 * 1024:
+                return JSONResponse({"detail": "Prise trop lourde."}, status_code=422)
     reponse = await appel(request)
     if chemin.startswith("/api/"):
         reponse.headers["Cache-Control"] = "no-store"
@@ -154,7 +190,12 @@ def noms_pour_millesime(request: Request):
 def reglages_actuels() -> dict:
     """Réglages d'usage, lus dans la base de l'appli (seule source depuis 0.7.0)."""
     a = ETAT["attente"]
-    return {k: a.reglage(k) or "" for k in REGLAGES}
+    sortie = {k: a.reglage(k) or "" for k in REGLAGES}
+    try:
+        sortie["purge_jours"] = int(sortie["purge_jours"])
+    except ValueError:
+        sortie["purge_jours"] = DEFAUTS["purge_jours"]
+    return sortie
 
 
 def noms_actuels() -> tuple[str, str]:
@@ -226,11 +267,24 @@ async def recevoir_prise(meta: str = Form(...), rendu: UploadFile = File(...), s
     de sa file). Un renvoi du même identifiant répond aussi 201, avec « deja »."""
     try:
         donnees = json.loads(meta)
-        corps_rendu = await rendu.read()
-        corps_source = await source.read() if source else None
+        corps_rendu = await _lire_plafonne(rendu, "rendu")
+        corps_source = await _lire_plafonne(source, "source") if source else None
         return await asyncio.to_thread(ETAT["attente"].recevoir, donnees, corps_rendu, corps_source)
+    except ErreurEspace as e:                # 507 : l'iPhone garde la prise et réessaie plus tard
+        raise HTTPException(507, str(e))
     except (ErreurPrise, json.JSONDecodeError, TypeError, ValueError) as e:
         raise HTTPException(422, str(e) or "Prise illisible.")
+
+
+async def _lire_plafonne(fichier: UploadFile, nom: str) -> bytes:
+    """0.7.6 (M35) : jamais plus de TAILLE_MAX + 1 octets en mémoire ; taille annoncée vérifiée avant toute lecture.
+    Les pixels (PIXELS_MAX) sont lus dans l'en-tête par Attente.recevoir, sans décoder l'image."""
+    if fichier.size is not None and fichier.size > TAILLE_MAX:
+        raise ErreurPrise(f"Fichier {nom} trop lourd.")
+    contenu = await fichier.read(TAILLE_MAX + 1)
+    if len(contenu) > TAILLE_MAX:
+        raise ErreurPrise(f"Fichier {nom} trop lourd.")
+    return contenu
 
 
 @app.get("/api/sections")
@@ -279,7 +333,7 @@ def valider_reglages(valeurs: dict) -> dict:
     """Vérifie les réglages reçus (écran ou sauvegarde) ; seules les clés connues comptent. HTTPException 400 sinon."""
     propres = {}
     for k, v in valeurs.items():
-        if k not in REGLAGES:
+        if k not in REGLAGES or k in DEFAUTS:      # « purge_jours » (entier) est vérifié plus bas
             continue
         if not isinstance(v, str):
             raise HTTPException(400, f"Valeur refusée pour « {k} » : texte attendu.")
@@ -290,6 +344,11 @@ def valider_reglages(valeurs: dict) -> dict:
             raise HTTPException(400, "Libellé obligatoire (80 caractères au plus).")
         if "/" in libelle or "\\" in libelle:
             raise HTTPException(400, "Le libellé ne peut pas contenir « / » : il sépare les niveaux du tag.")
+    if "purge_jours" in valeurs:
+        v = valeurs["purge_jours"]
+        if isinstance(v, bool) or not isinstance(v, int) or not 1 <= v <= PURGE_MAX:
+            raise HTTPException(400, f"Purge de la zone d'attente : nombre entier de jours, de 1 à {PURGE_MAX}.")
+        propres["purge_jours"] = v
     if len(propres.get("album_non_datees", "")) > 120:
         raise HTTPException(400, "Album des non datées : 120 caractères au plus.")
     return propres
@@ -297,7 +356,7 @@ def valider_reglages(valeurs: dict) -> dict:
 
 def appliquer_reglages(propres: dict) -> dict:
     for k, v in propres.items():
-        ETAT["attente"].regler(k, v)
+        ETAT["attente"].regler(k, str(v))
     return reglages_actuels()
 
 

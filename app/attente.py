@@ -9,22 +9,53 @@ jusqu'à l'envoi dans Immich. Rien n'entre dans Immich depuis ce module.
 """
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
+import shutil
 import sqlite3
 import threading
-from datetime import datetime
+import warnings
+from datetime import datetime, timedelta
 from pathlib import Path
+
+from PIL import Image
 
 ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 MODES = ("rafale", "photo", "page")
 TAILLE_MAX = 30 * 1024 * 1024        # par fichier
+PIXELS_MAX = 64_000_000              # 0.7.6 (M35) : par image ; une source d'iPhone de 48 Mpx passe
+ESPACE_MIN = 1024 ** 3               # 0.7.6 (M33) : moins de 1 Go libre sur le disque : réception refusée
 JPEG = b"\xff\xd8\xff"
 
 
 class ErreurPrise(ValueError):
     pass
+
+
+class ErreurEspace(Exception):
+    """0.7.6 (M33) : disque presque plein. L'iPhone garde la prise et réessaie plus tard (réponse 507)."""
+
+
+def espace_libre(dossier: Path) -> int:
+    return shutil.disk_usage(dossier).free
+
+
+def verifier_pixels(nom: str, contenu: bytes) -> None:
+    """0.7.6 (M35) : lit seulement l'en-tête du JPEG (aucun décodage) et refuse une image trop grande.
+    Un en-tête illisible n'est pas refusé ici (même comportement qu'avant)."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(contenu)) as im:
+                largeur, hauteur = im.size
+    except Image.DecompressionBombError:
+        raise ErreurPrise(f"Image {nom} trop grande.") from None
+    except Exception:  # noqa: BLE001 — en-tête illisible : laissé passer
+        return
+    if largeur * hauteur > PIXELS_MAX:
+        raise ErreurPrise(f"Image {nom} trop grande ({largeur} × {hauteur} pixels).")
 
 
 class Attente:
@@ -55,7 +86,9 @@ class Attente:
             ("prise", "asset_id", "TEXT"), ("prise", "erreur", "TEXT"),
             ("section", "annee", "INTEGER"), ("section", "mois", "INTEGER"), ("section", "non_datee", "INTEGER"),
             ("section", "album", "TEXT"), ("section", "tag", "TEXT"), ("section", "etapes", "TEXT"),
-            ("section", "progression", "TEXT"), ("section", "erreur", "TEXT")):
+            ("section", "progression", "TEXT"), ("section", "erreur", "TEXT"),
+            # 0.7.6 (M33) : date de l'envoi dans Immich, et date où ses fichiers ont été effacés de la zone d'attente
+            ("prise", "envoyee_le", "TEXT"), ("prise", "purgee_le", "TEXT")):
             if colonne not in [c[1] for c in self._db.execute(f"PRAGMA table_info({table})")]:
                 self._db.execute(f"ALTER TABLE {table} ADD COLUMN {colonne} {defn}")
         self._db.commit()
@@ -84,6 +117,7 @@ class Attente:
                 raise ErreurPrise(f"Fichier {nom} trop lourd.")
             if not contenu.startswith(JPEG):
                 raise ErreurPrise(f"Le fichier {nom} n'est pas un JPEG.")
+            verifier_pixels(nom, contenu)
         if not rendu:
             raise ErreurPrise("Image rendue absente.")
         with self._verrou:
@@ -92,6 +126,8 @@ class Attente:
                 if deja["taille_rendu"] != len(rendu):
                     raise ErreurPrise("Cet identifiant de prise est déjà pris par une autre image.")
                 return {"ok": True, "id": pid, "deja": True}
+            if espace_libre(self.dossier) - len(rendu) - len(source or b"") < ESPACE_MIN:
+                raise ErreurEspace("Disque du NAS presque plein (moins de 1 Go libre) : la prise attend sur l'iPhone.")
             dossier = self.dossier / "attente" / sid
             dossier.mkdir(parents=True, exist_ok=True)
             self._ecrire(dossier / f"{pid}-rendu.jpg", rendu)
@@ -238,6 +274,28 @@ class Attente:
 
     def en_attente(self) -> int:
         return self._db.execute("SELECT COUNT(*) FROM prise WHERE statut='attente'").fetchone()[0]
+
+    # ------------------------------------------------------------------ purge (0.7.6, M33)
+    def purger(self, jours: int, maintenant: datetime | None = None) -> int:
+        """Efface de la zone d'attente les fichiers des prises envoyées dans Immich depuis plus de « jours » jours.
+        La ligne de la prise reste (journal, Annuler) ; seuls ses fichiers partent. Rend le nombre de prises purgées."""
+        limite = ((maintenant or datetime.now().astimezone()) - timedelta(days=int(jours))).isoformat(timespec="seconds")
+        with self._verrou:
+            lignes = self._db.execute(
+                "SELECT id, section_id FROM prise WHERE statut='envoyee' AND purgee_le IS NULL"
+                " AND COALESCE(envoyee_le, recue_le) < ?", (limite,)).fetchall()
+            quand = datetime.now().astimezone().isoformat(timespec="seconds")
+            for l in lignes:
+                dossier = self.dossier / "attente" / l["section_id"]
+                for quoi in ("rendu", "source", "vignette"):
+                    (dossier / f"{l['id']}-{quoi}.jpg").unlink(missing_ok=True)
+                self._db.execute("UPDATE prise SET purgee_le=? WHERE id=?", (quand, l["id"]))
+                try:
+                    dossier.rmdir()                    # seulement s'il est vide
+                except OSError:
+                    pass
+            self._db.commit()
+        return len(lignes)
 
     # ------------------------------------------------------------------ abandon (avant tout envoi)
     def retirer(self, pid: str) -> bool:

@@ -185,7 +185,8 @@ class Envoyeur:
                 aid, doublon = self.immich.envoyer(contenu, nom, f"chambre-noire-{p['id']}", quand)
                 if doublon:
                     self.immich.restaurer([aid])
-                self.attente.maj_prise(p["id"], statut="envoyee", asset_id=aid, erreur=None)
+                self.attente.maj_prise(p["id"], statut="envoyee", asset_id=aid, erreur=None,
+                                       envoyee_le=datetime.now().astimezone().isoformat(timespec="seconds"))
                 ids.append(aid)
             except Exception as e:  # noqa: BLE001 — une photo ratée ne bloque pas les autres
                 erreurs += 1
@@ -223,8 +224,13 @@ class Envoyeur:
         self.immich.corbeille(ids)
         self.attente.marquer_annule(jid)
         # les prises reviennent « à dater » : on peut renvoyer avec une autre date
+        purgees = 0
         for p in self.attente.prises_a_envoyer(e["section_id"]):
             if p["asset_id"] in ids:
-                self.attente.maj_prise(p["id"], statut="attente", asset_id=None, erreur=None)
+                if p.get("purgee_le"):       # 0.7.6 (M33) : fichiers déjà purgés, rien à renvoyer
+                    purgees += 1
+                    self.attente.maj_prise(p["id"], statut="annulee", asset_id=None, erreur=None)
+                else:
+                    self.attente.maj_prise(p["id"], statut="attente", asset_id=None, erreur=None, envoyee_le=None)
         self.attente.maj_section(e["section_id"], statut="en_cours", etapes=[], album=None, tag=None)
-        return {"ok": True, "photos": len(ids)}
+        return {"ok": True, "photos": len(ids), "purgees": purgees}

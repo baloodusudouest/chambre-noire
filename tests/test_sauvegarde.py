@@ -49,7 +49,7 @@ def test_reprise_au_premier_demarrage_puis_variable_ignoree(tmp_path):
     c, _ = client(tmp_path, libelle="Numérisation Stack", album_non_datees="Sans date stack")
     with c:
         connecter(c)
-        assert c.get("/api/reglages").json() == {"libelle": "Numérisation Stack", "album_non_datees": "Sans date stack"}
+        assert c.get("/api/reglages").json() == {"libelle": "Numérisation Stack", "album_non_datees": "Sans date stack", "purge_jours": 30}
         lignes = journal_reglages(c)
         assert sorted((e["action"], e["details"]["variable"]) for e in lignes) == [
             ("reglage", "CHAMBRE_NOIRE_ALBUM_NON_DATEES"), ("reglage", "CHAMBRE_NOIRE_LIBELLE")]
@@ -57,7 +57,7 @@ def test_reprise_au_premier_demarrage_puis_variable_ignoree(tmp_path):
     c2, _ = client(tmp_path, libelle="Numérisation Autre stack", album_non_datees="Autre")
     with c2:
         connecter(c2)
-        assert c2.get("/api/reglages").json() == {"libelle": "Numérisation Stack", "album_non_datees": "Sans date stack"}
+        assert c2.get("/api/reglages").json() == {"libelle": "Numérisation Stack", "album_non_datees": "Sans date stack", "purge_jours": 30}
         assert len(journal_reglages(c2)) == 2            # aucune nouvelle reprise
 
 
@@ -94,7 +94,7 @@ def test_put_reglages_partiel_et_types(tmp_path):
         assert c.put("/api/reglages", json={"libelle": "X"}).status_code == 401      # session nécessaire
         connecter(c)
         r = c.put("/api/reglages", json={"libelle": "Numérisation Neuve"})
-        assert r.status_code == 200 and r.json() == {"libelle": "Numérisation Neuve", "album_non_datees": "Sans date"}
+        assert r.status_code == 200 and r.json() == {"libelle": "Numérisation Neuve", "album_non_datees": "Sans date", "purge_jours": 30}
         r = c.put("/api/reglages", json={"libelle": 12})
         assert r.status_code == 400 and "texte attendu" in r.json()["detail"]
         assert c.put("/api/reglages", json={"album_non_datees": ["a"]}).status_code == 400
@@ -124,7 +124,7 @@ def test_sauvegarde_jeton_requis_et_contenu(tmp_path, monkeypatch):
         j = r.json()
     from app import __version__
     assert j["contrat"] == 1 and j["appli"] == "chambre-noire" and j["version"] == __version__
-    assert j["reglages"] == {"libelle": "Numérisation Essai", "album_non_datees": "Sans date"}
+    assert j["reglages"] == {"libelle": "Numérisation Essai", "album_non_datees": "Sans date", "purge_jours": 30}
     texte = json.dumps(j)
     for interdit in ("millesime_vu", JETON, "mot-de-passe", "cle-de-test", "http://immich", "CHAMBRE_NOIRE_", str(tmp_path)):
         assert interdit not in texte

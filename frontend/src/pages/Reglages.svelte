@@ -20,6 +20,20 @@
       await relire?.()
     } catch (err) { messageNoms = err.message }
   }
+  // ---- 0.7.6 : purge de la zone d'attente (fichiers déjà envoyés effacés du NAS après ce nombre de jours)
+  let purge = $state(30)
+  let purgeLue = $state(30)
+  let messagePurge = $state('')
+  async function lirePurge() {
+    try { purge = purgeLue = (await api.get('/api/reglages')).purge_jours } catch { /* reste à 30 */ }
+  }
+  async function enregistrerPurge() {
+    messagePurge = ''
+    try {
+      purge = purgeLue = (await api.put('/api/reglages', { purge_jours: Number(purge) })).purge_jours
+      messagePurge = 'Enregistré.'
+    } catch (err) { messagePurge = err.message }
+  }
   let journal = $state(null)
   let message = $state('')
   let confirmer = $state(null)
@@ -33,12 +47,13 @@
     try {
       const r = await api.post(`/api/journal/${e.id}/annuler`)
       message = `${r.photos} photo${r.photos > 1 ? 's' : ''} retirée${r.photos > 1 ? 's' : ''} de l’album et du tag, mise${r.photos > 1 ? 's' : ''} à la corbeille d’Immich. Elles sont revenues dans « À traiter ».`
+      if (r.purgees) message += ` Sauf ${r.purgees} déjà effacée${r.purgees > 1 ? 's' : ''} du NAS par la purge : à reprendre en photo.`
     } catch (err) { message = err.message }
     confirmer = null
     lire()
   }
   // ---- 0.7.0 : restaurer les réglages depuis une sauvegarde de l'Anneau (réglages seulement, permis en lecture seule)
-  const NOMS_REGLAGES = { libelle: 'Libellé des albums et des tags', album_non_datees: 'Album des photos non datées' }
+  const NOMS_REGLAGES = { libelle: 'Libellé des albums et des tags', album_non_datees: 'Album des photos non datées', purge_jours: 'Purge de la zone d’attente (jours)' }
   const valeur = (v) => (v === '' || v === null || v === undefined ? '(vide)' : String(v))
   let dates = $state(null)
   let choix = $state('')
@@ -62,6 +77,7 @@
       const r = await api.post('/api/restaurer', { le: choix })
       libelle = r.reglages.libelle
       albumNd = r.reglages.album_non_datees
+      purge = purgeLue = r.reglages.purge_jours
       messageRestaurer = r.appliques.length
         ? `Réglages restaurés depuis la sauvegarde du ${jour(choix)} (${r.appliques.length}).`
         : 'Rien à restaurer : les réglages sont déjà ceux de cette sauvegarde.'
@@ -75,7 +91,7 @@
   const ligneJournal = (e) => e.action === 'restauration'
     ? `Réglages restaurés (sauvegarde du ${jour(e.details.le)})`
     : `Réglage repris de la stack : ${NOMS_REGLAGES[e.details.cle] || e.details.cle}`
-  onMount(() => { lire(); lireDates() })
+  onMount(() => { lire(); lireDates(); lirePurge() })
 </script>
 
 <header class="mb-5">
@@ -137,6 +153,18 @@
     <div><Button onclick={enregistrerNoms} disabled={!change || !libelle.trim()}>Enregistrer</Button></div>
     {#if messageNoms}<p class="text-sm" role="status">{messageNoms}</p>{/if}
   </div>
+</section>
+
+<section class="mt-4 rounded-2xl border bg-card p-5" aria-label="Zone d’attente">
+  <h2 class="text-lg font-semibold">Zone d’attente</h2>
+  <div class="mt-3 flex flex-wrap items-end gap-3">
+    <label class="grid gap-1 text-sm">Effacer du NAS les photos envoyées depuis (jours)
+      <input type="number" min="1" max="365" bind:value={purge} class="h-11 w-28 rounded-lg border bg-background px-3" />
+    </label>
+    <Button onclick={enregistrerPurge} disabled={Number(purge) === purgeLue}>Enregistrer</Button>
+  </div>
+  <p class="mt-2 text-xs text-muted-foreground">Les photos restent dans Immich. Une fois effacées du NAS, annuler leur envoi ne les ramène plus dans « À traiter ». Sous 1 Go libre, le NAS refuse les nouvelles prises : elles attendent sur l’iPhone.</p>
+  {#if messagePurge}<p class="mt-2 text-sm" role="status">{messagePurge}</p>{/if}
 </section>
 
 <section class="mt-4 rounded-2xl border bg-card p-5" aria-label="Restaurer les réglages">
