@@ -44,8 +44,12 @@ def test_parcours(adresse, taille):
         page.wait_for_selector("h1:has-text('Scanner')")
         page.goto(adresse + "/#/connexion")
         page.wait_for_selector("h1:has-text('Connexion')")
-        page.get_by_role("list", name="Services").get_by_text("Immich", exact=True).click()
+        # 0.9.0 : écran commun (3 services : fiches dépliées) ; Vérifier sur Immich, permissions dans le guide
+        immich = page.get_by_role("article", name="Immich", exact=True)
+        immich.get_by_role("button", name="Vérifier").click()
+        immich.get_by_text("1 permission manquante à la clé").click()
         page.wait_for_selector("text=queue.update ou job.create")
+        page.get_by_role("article", name="Millésime").get_by_role("heading", name="Millésime").wait_for()
         page.goto(adresse + "/#/reglages")
         page.fill("input[placeholder='Numérisation …']", f"Numérisation Écran {taille[0]}")
         page.click("text=Enregistrer")

@@ -12,7 +12,7 @@
   import { api } from '$lib/api.js'
   import Connexion from './pages/Connexion.svelte'
   import Scanner from './pages/Scanner.svelte'
-  import Services from './pages/Services.svelte'
+  import Services from '$lib/services/Services.svelte'   // 0.9.0 : écran « Connexion » commun (contrat 3, socle 0.11.0)
   import Reglages from './pages/Reglages.svelte'
 
   const onglets = [
@@ -96,7 +96,7 @@
           {#if page === 'a-traiter'}
             <ATraiter ondeconnecte={() => (connecte = false)} {session} />
           {:else if page === 'connexion'}
-            <Services ondeconnecte={() => (connecte = false)} />
+            <Services etiquette="Chambre noire" lectureSeule={session.lecture_seule} ondeconnecte={() => (connecte = false)} />
           {:else if page === 'reglages'}
             <Reglages {session} {deconnecter} relire={verifier} />
           {:else}

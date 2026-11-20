@@ -12,6 +12,9 @@ libre ; taille et pixels contrôlés à la réception, avant de lire l'image en 
 0.8.0 (santé des tâches de fond, socle 0.9.0) : tâches suivies dans maison.TACHES (« purge » toutes les 6 h,
 « envoi-immich » à la demande), copie cohérente de chambre-noire.db chaque nuit à 02:00 (heure de Paris) dans
 /data/copies ; /health ajoute version_socle, taches et copie_base. Un seul worker uvicorn (registre en mémoire).
+0.9.0 (fiches « Connexion » communes, contrat 3, socle 0.11.0) : /api/maison/services et son « Vérifier » (session ou
+ANNEAU_CLE) ; services Immich, Visages d'Immich (immich-ml) et Millésime. /api/services (ancienne forme) gardée une
+version, à retirer en 0.10.0.
 """
 from __future__ import annotations
 
@@ -20,6 +23,7 @@ import json
 import re
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 
 import time
@@ -193,7 +197,9 @@ def noms_pour_millesime(request: Request):
     if not maison.jeton_valide(propose, acceptes):      # temps constant
         raise HTTPException(401, "Jeton refusé.")
     libelle, nd = noms_actuels()
-    ETAT["attente"].regler("millesime_vu", time.strftime("%Y-%m-%dT%H:%M:%S"))
+    vu = time.strftime("%Y-%m-%dT%H:%M:%S")
+    ETAT["attente"].regler("millesime_vu", vu)
+    SERVICES.noter("millesime", True, f"Dernière lecture : {_quand(vu)}.")     # 0.9.0 : fiche « Connexion »
     if not libelle:
         return {"regle": False, "version": __version__}
     album_nd, tag_nd = noms(libelle, 0, 0, True, nd)
@@ -264,15 +270,131 @@ def deconnexion():
     return r
 
 
-# ================================================================ services (écran « Connexion »)
+# ================================================================ services (ancienne forme de l'écran « Connexion »)
 
 @app.get("/api/services")
 def services():
-    """Lit l'état d'Immich (version, clé, permissions) et du service d'apprentissage. N'écrit rien."""
+    """Lit l'état d'Immich (version, clé, permissions) et du service d'apprentissage. N'écrit rien.
+    0.9.0 : plus lue par l'interface (écran commun sur /api/maison/services) ; gardée une version,
+    à retirer à la version suivante (0.10.0)."""
     return {"immich": asdict(ETAT["immich"].etat()), "apprentissage": ETAT["apprentissage"].etat(),
             "lecture_seule": ETAT["cfg"].lecture_seule, "origine_lecture_seule": _origine_lecture_seule(),
             "libelle": noms_actuels()[0],
             "millesime": {"ouvert": bool(maison.jetons()), "vu": ETAT["attente"].reglage("millesime_vu")}}
+
+
+# ================================================================ fiches « Connexion » (0.9.0, contrat 3, socle 0.11.0)
+# GET /api/maison/services et POST /api/maison/services/{id}/verifier (session ou ANNEAU_CLE) : écran commun
+# $lib/services/Services.svelte, et fiche « État » de l'Anneau. Le GET ne lance aucun essai. Essais légers, rien
+# d'écrit : Immich lit sa version et la clé (GET /api/server/version, GET /api/api-keys/me), le service
+# d'apprentissage répond à /ping, Millésime : heure de sa dernière lecture des noms (aucun appel réseau).
+# Aucun geste qui écrit dans cet écran : « Dater et envoyer » et Annuler restent dans À traiter et Réglages.
+
+MILLESIME_RECENT_S = 3 * 3600            # comme l'ancien voyant : vert si Millésime a lu les noms depuis moins de 3 h
+
+
+def _cfg_prete() -> Config | None:
+    return ETAT.get("cfg") if "attente" in ETAT else None
+
+
+def _quand(iso: str) -> str:
+    try:
+        d = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return iso
+    return d.strftime("%d/%m/%Y à %H:%M")
+
+
+def _essai_immich():
+    """Lecture courte (version, clé, permissions) ; le résultat sert aussi au guide de la fiche."""
+    e = ETAT["immich"].etat()
+    ETAT["immich_dernier"] = e
+    if not e.ok:
+        return False, e.erreur or "Immich ne répond pas."
+    morceaux = [f"Immich {e.version}."]
+    if e.cle_nom:
+        morceaux.append(f"Clé « {e.cle_nom} ».")
+    if e.erreur:
+        morceaux.append(e.erreur)
+    elif e.permissions_lues:
+        n = len(e.manquantes)
+        morceaux.append(f"{n} permission{'s' if n > 1 else ''} manquante{'s' if n > 1 else ''} (voir plus bas)."
+                        if n else "Toutes les permissions utiles sont là.")
+    if not noms_actuels()[0]:
+        morceaux.append("Libellé absent.")
+    return True, " ".join(morceaux)
+
+
+def _guide_immich() -> dict | None:
+    """Ce que montrait l'ancien écran sous Immich : libellé, nom de la clé, permissions à ajouter. Lu dans la base
+    et dans le dernier essai (aucun appel réseau ici : le GET ne lance rien)."""
+    if "attente" not in ETAT:
+        return None
+    libelle = noms_actuels()[0]
+    reglages = [{"nom": "Libellé", "valeur": f"« {libelle} »" if libelle
+                 else "absent : à régler dans Réglages › Noms dans Immich"}]
+    e = ETAT.get("immich_dernier")
+    pannes, note = [], ""
+    if e is not None and e.ok:
+        reglages.insert(0, {"nom": "Version", "valeur": e.version})
+        if e.cle_nom:
+            reglages.append({"nom": "Clé", "valeur": f"« {e.cle_nom} »"})
+        if e.permissions_lues and e.manquantes:
+            pannes.append({"signe": f"{len(e.manquantes)} permission{'s' if len(e.manquantes) > 1 else ''} "
+                                    "manquante" + ("s" if len(e.manquantes) > 1 else "") + " à la clé",
+                           "faire": ["À ajouter à la clé dans Immich (avatar › Paramètres du compte › Clés API › Modifier) :"]
+                           + [f"{m['permission']} — {m['pour']}" for m in e.manquantes]})
+        elif e.permissions_lues:
+            note = "Toutes les permissions utiles sont là."
+    elif e is None:
+        note = "Vérifier lit la version d'Immich, le nom de la clé et ses permissions."
+    return {"reglages": reglages, "pannes": pannes, "note": note}
+
+
+def _essai_apprentissage():
+    r = ETAT["apprentissage"].etat()
+    return (True, f"Répond en {r['ms']} ms.") if r.get("ok") else (False, r.get("erreur") or "Hors service.")
+
+
+def _essai_millesime():
+    """Aucun appel à Millésime : c'est lui qui vient lire ici. Répond = il a lu les noms depuis moins de 3 h."""
+    vu = ETAT["attente"].reglage("millesime_vu")
+    if not vu:
+        return False, "Millésime n'est encore jamais venu lire."
+    try:
+        recent = (datetime.now() - datetime.fromisoformat(vu)).total_seconds() < MILLESIME_RECENT_S
+    except ValueError:
+        recent = False
+    return recent, f"Dernière lecture : {_quand(vu)}."
+
+
+SERVICES = maison.Services(APPLI)
+SERVICES.ajouter(
+    "immich", "Immich",
+    lit="La version, la clé et ses permissions, les albums.",
+    ecrit="Les photos datées, l'album du mois, le tag, la description (nom de l'album), le lancement du rangement ; "
+          "Annuler : retrait et corbeille.",
+    regle=lambda: bool((c := _cfg_prete()) and c.immich_url and c.immich_cle),
+    reglage="CHAMBRE_NOIRE_IMMICH_URL et CHAMBRE_NOIRE_IMMICH_CLE",
+    essai=_essai_immich, guide=_guide_immich)
+SERVICES.ajouter(
+    "immich-ml", "Visages d'Immich",
+    lit="Le service d'apprentissage d'Immich donnera le « haut » de chaque photo, sur le NAS, après la prise "
+        "(étape 5). Il ne reçoit que des images réduites.",
+    ecrit="Rien.",
+    regle=lambda: bool((c := _cfg_prete()) and c.ml_url), reglage="CHAMBRE_NOIRE_ML_URL",
+    essai=_essai_apprentissage)
+SERVICES.ajouter(
+    "millesime", "Millésime", genre="maison", cible="millesime",
+    lit="Rien : c'est Millésime qui vient lire ici. Millésime date les photos non datées. Il vient lire ici, à chaque "
+        "relecture d'Immich, le libellé, l'album et le tag des non datées réglés dans Réglages › Noms dans Immich, "
+        "et les suit.",
+    ecrit="Chambre noire n'écrit rien dans Millésime.",
+    regle=lambda: bool(maison.jetons()),
+    reglage="MAISON_JETON (jeton commun des applis maison, le même que lit Millésime)",
+    essai=_essai_millesime)
+# Monté APRÈS la garde : le dernier middleware ajouté passe en premier.
+maison.monter_services(app, SERVICES, lambda r: "sessions" in ETAT and ETAT["sessions"].connecte(r.cookies))
 
 
 # ================================================================ zone d'attente (étape 2)

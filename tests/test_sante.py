@@ -37,7 +37,7 @@ def test_health_porte_la_sante_sans_message_sans_jeton(tmp_path):
     c, _ = client(tmp_path)
     with c:
         r = c.get("/health").json()
-        assert r["version_socle"] == "0.9.1"
+        assert r["version_socle"] == "0.11.0"
         taches = par_nom(r)
         assert {"purge", "envoi-immich", "copie-des-bases"} <= set(taches)
         assert taches["purge"]["type"] == "reguliere" and taches["purge"]["periode_s"] == 6 * 3600

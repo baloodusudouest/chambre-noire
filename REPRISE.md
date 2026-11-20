@@ -7,7 +7,7 @@ Réécriture sur le socle de « Scan Immich » (page unique servie par nginx, en
 numériser à l'iPhone les tirages papier d'albums familiaux et les envoyer dans Immich, datés, tagués, rangés.
 Dossier complet (besoin, technique, parcours, design, données, plan, écarts, avis du conseil) : `docs/dossier.md`.
 
-## État (18/11/2026)
+## État (20/11/2026, version 0.9.0)
 - **0.1.0** : squelette, déployé et vérifié sur le NAS (Connexion verte avec la vraie clé).
 - **0.2.0** : zone d'attente (NAS : réception idempotente, SQLite, fichiers dans /data/attente ; iPhone : file
   d'envoi avec accusé de réception) et écran À traiter. 26 tests verts en local. Pas encore essayée sur le NAS.
@@ -55,6 +55,12 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
   `chambre-noire.db` à 02:00 heure de Paris dans `/data/copies` (`chambre-noire-derniere.db`, `copie.json`).
   `/health` ajoute `version_socle`, `taches`, `copie_base` (messages seulement avec `MAISON_JETON` ou une session). Un seul worker uvicorn.
   Tests : `tests/test_sante.py`. Jamais essayé sur la vraie installation (ni la copie de nuit, ni une restauration depuis la copie).
+- **0.9.0** (20/11/2026) : fiches « Connexion » communes (contrat 3, socle 0.11.0). Écran `$lib/services/Services.svelte`
+  (copie signée du socle, ne pas la retoucher) ; `pages/Services.svelte` retiré. `main.py`, section « fiches Connexion » :
+  `SERVICES` = `immich` (guide : version, libellé, clé, permissions manquantes, lu dans le dernier essai `ETAT["immich_dernier"]`),
+  `immich-ml` (Visages d'Immich), `millesime` (genre maison ; essai sans réseau sur `millesime_vu`, `SERVICES.noter` dans `/externe/noms`).
+  `maison.monter_services` après la garde. `ANNEAU_CLE` (facultative) ouvre `/api/maison/services`. Ancienne `GET /api/services`
+  gardée, à retirer en 0.10.0. Tests : `tests/test_fiches_connexion.py`. Jamais essayé sur la vraie installation.
 
 ## Prochaine étape (plan revu par le conseil)
 1. ~~Squelette~~ (fait, vérifié sur le NAS).
@@ -77,7 +83,7 @@ Dossier complet (besoin, technique, parcours, design, données, plan, écarts, a
 - Les tests de caméra baissent les seuils de définition (`window.__reglagesCamera`, seulement avec `?essai`) :
   les caméras simulées font 1440 px. Ne pas baisser `REGLAGES.minPx` dans le code.
 - `wait_for_function` de Playwright n'attend pas une promesse : interroger le NAS en Python (`_attendre`).
-- `pages/Connexion.svelte` est la page du mot de passe ; l'écran « Connexion » est `pages/Services.svelte`.
+- `pages/Connexion.svelte` est la page du mot de passe ; l'écran « Connexion » est l'écran commun `lib/services/Services.svelte` (0.9.0).
 - La caméra exige HTTPS (tailscale serve) et refuse un cadre servi en http : la tuile de l'Anneau s'ouvre à côté.
 - Un seul service par port `tailscale serve` : vérifier `tailscale serve status` avant d'attribuer un port.
 - La clé Immich a besoin de `queue.update` (ou `job.create`) pour lancer le rangement (erreur 403 vécue le 31/10).

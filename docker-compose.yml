@@ -11,6 +11,7 @@ services:
       # Variables communes de la maison (module app/maison.py)
       - MAISON_PASSWORD=${MAISON_PASSWORD}                        # mot de passe commun des applis (12 caractères au moins)
       - MAISON_JETON=${MAISON_JETON:-}                            # jeton commun : ouvre /externe/noms (Millésime) et /externe/sauvegarde (Anneau)
+      - ANNEAU_CLE=${ANNEAU_CLE:-}                                # contrat 3 : l'Anneau lit les fiches « Connexion » ; vide = porte fermée
       - MAISON_LECTURE_SEULE=${MAISON_LECTURE_SEULE:-}            # « oui » : aucune appli n'écrit ; CHAMBRE_NOIRE_LECTURE_SEULE l'emporte si posée
       - CHAMBRE_NOIRE_LECTURE_SEULE=${CHAMBRE_NOIRE_LECTURE_SEULE:-}   # « oui » ou « non » : force Chambre noire seule
       - CHAMBRE_NOIRE_IMMICH_URL=http://immich_server:2283
