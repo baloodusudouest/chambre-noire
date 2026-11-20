@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 0.9.1 — 20 novembre 2026 (socle 0.11.1)
+- Copies communes du socle 0.11.1 : sur une fiche « Connexion », le titre devient « Pour le relier » quand le réglage se fait dans Réglages de l'appli (et non dans la stack).
+- **Jamais essayé sur la vraie installation.**
+
 ## 0.9.0 — 20 novembre 2026 (fiches « Connexion » communes, contrat 3)
 - **Écran « Connexion » commun** (socle 0.11.0) : `frontend/src/lib/services/FicheService.svelte` et `Services.svelte`, copies signées du socle (empreinte contrôlée par les tests, ne pas les retoucher ici), remplacent `pages/Services.svelte` (retiré). Trois services, donc trois fiches dépliées : point d'état et état en mots, Ce qui est lu, Ce qui est écrit, Pour le relier (variable de la stack), Vérifier (contour, ne teste que son service, n'écrit rien).
   - **Immich** (`immich`) : lit « La version, la clé et ses permissions, les albums. » ; écrit « Les photos datées, l'album du mois, le tag, la description (nom de l'album), le lancement du rangement ; Annuler : retrait et corbeille. ». Relié par `CHAMBRE_NOIRE_IMMICH_URL` et `CHAMBRE_NOIRE_IMMICH_CLE`. Vérifier lit la version et la clé (`GET /api/server/version`, `GET /api/api-keys/me`). Ce que l'ancien écran montrait dessous passe dans le guide de la fiche : version, libellé (ou « absent : à régler dans Réglages › Noms dans Immich »), nom de la clé, et les permissions manquantes avec le chemin dans Immich (avatar › Paramètres du compte › Clés API › Modifier).

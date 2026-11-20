@@ -3,6 +3,7 @@
 À lire en premier ; mis à jour dans le même commit que le code.
 
 ## Ce que c'est
+- **0.9.1 (20/11/2026)** : copies communes du socle 0.11.1 (titre « Pour le relier » quand le réglage est dans l'appli).
 Réécriture sur le socle de « Scan Immich » (page unique servie par nginx, en service depuis le 28/10/2026) :
 numériser à l'iPhone les tirages papier d'albums familiaux et les envoyer dans Immich, datés, tagués, rangés.
 Dossier complet (besoin, technique, parcours, design, données, plan, écarts, avis du conseil) : `docs/dossier.md`.
