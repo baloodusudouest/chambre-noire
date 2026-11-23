@@ -8,6 +8,8 @@ Réécriture sur le socle de « Scan Immich » (page unique servie par nginx, en
 numériser à l'iPhone les tirages papier d'albums familiaux et les envoyer dans Immich, datés, tagués, rangés.
 Dossier complet (besoin, technique, parcours, design, données, plan, écarts, avis du conseil) : `docs/dossier.md`.
 
+## État (23/11/2026) — 0.9.3 : listes déroulantes lisibles en sombre (`frontend/src/app.css`, bloc « Listes déroulantes (socle 0.12.2) » : `select option, select optgroup` aux couleurs `--popover`). Jamais essayé sur la vraie installation.
+
 ## État (22/11/2026) — 0.9.2 : barre d'onglets collée en bas sur iPhone (`App.svelte`, classes du socle 0.12.1 : `fixed inset-x-0 bottom-0 … pb-[calc(0.375rem+env(safe-area-inset-bottom))]`, `md:right-auto md:justify-start`). Jamais essayé sur la vraie installation.
 
 ## État (20/11/2026, version 0.9.0)
