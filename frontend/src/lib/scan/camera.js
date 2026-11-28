@@ -15,6 +15,37 @@ export const REGLAGES = {
   qualite: 0.92,      // JPEG
   filtre: 'restore',  // restauration douce des couleurs passées
   intensite: 70,
+  delaiAutorisation: 20000,   // ms : réponse de la caméra (iOS peut d'abord demander l'autorisation)
+  delaiReglage: 3000,         // ms : chaque ajustement de définition (abandonné au-delà, on garde la définition reçue)
+  delaiImage: 8000,           // ms : première image visible
+}
+
+/** Ouverture dépassée par une autre, ou caméra fermée pendant l'ouverture : rien à signaler. */
+export class Depasse extends Error { constructor() { super('Ouverture remplacée.'); this.name = 'Depasse' } }
+
+const attendreMs = (ms) => new Promise((ok) => setTimeout(ok, ms))
+/** promesse, ou erreur(message) si elle n'a pas abouti en ms. */
+function delai(promesse, ms, message) {
+  let t
+  return Promise.race([promesse, new Promise((_, ko) => { t = setTimeout(() => ko(new Error(message)), ms) })]).finally(() => clearTimeout(t))
+}
+/** Attend une promesse au plus ms ; refus ou dépassement ignorés. */
+const essayer = (promesse, ms) => delai(promesse, ms, '').catch(() => {})
+/** Résolue quand la vidéo a une vraie image (dimensions connues et une image décodée). */
+function imagePrete(v) {
+  return new Promise((ok) => {
+    const debut = Date.now()
+    const t = setInterval(voir, 200)
+    function voir() {
+      const prete = v.videoWidth > 0 && v.readyState >= 2
+      if (prete || Date.now() - debut > 30000) {
+        clearInterval(t); v.removeEventListener('loadeddata', voir); v.removeEventListener('resize', voir)
+        if (prete) ok()
+      }
+    }
+    v.addEventListener('loadeddata', voir); v.addEventListener('resize', voir)
+    voir()
+  })
 }
 
 // banc d'essai (?essai) : les tests baissent les seuils pour leurs caméras simulées de faible définition
@@ -35,6 +66,9 @@ export class Camera {
     this.cv = null
     this.flux = null
     this.marche = false
+    this.gen = 0           // numéro de l'ouverture en cours (0.9.4)
+    this.etape = null      // etape(texte) : étape de l'ouverture, affichée à l'écran
+    this.surInterruption = null   // appelé quand iOS coupe la caméra pendant la prise de vue
     this.petite = null
     this.reinit()
     this.section = null
@@ -46,31 +80,101 @@ export class Camera {
     Object.assign(this, { dernierT: 0, arme: true, manque: 0, occupe: false, quads: [], stableDepuis: 0, derniere: null })
   }
 
+  /**
+   * Ouverture de la caméra, étape par étape, chacune avec un délai maximal (0.9.4) : sur l'iPhone, surtout depuis
+   * l'icône d'accueil, iOS peut couper la caméra pendant qu'elle s'ouvre (demande d'autorisation, passage en
+   * arrière-plan) ; une promesse restait alors en attente pour toujours (« Préparation de la caméra… » sans fin).
+   * Une seule ouverture à la fois : chaque appel porte un numéro (`gen`) ; une ouverture dépassée par une autre
+   * (ou par fermer()) rend sa caméra et s'arrête sans rien toucher. En cas d'image noire, un second essai part
+   * sans ajustement de définition. `etape(texte)` : appelé à chaque étape (affichée à l'écran).
+   */
   async ouvrir() {
-    this.flux = await navigator.mediaDevices.getUserMedia({
-      audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } },
-    })
-    // garde la plus grande définition entre 4:3 (4032×3024) et 4K 16:9 (3840×2160)
-    const piste = this.flux.getVideoTracks()[0]
-    const px = () => { const s = piste.getSettings(); return (s.width || 0) * (s.height || 0) }
-    if (px() < 3840 * 2160) {
-      const avant = px()
-      try { await piste.applyConstraints({ width: { ideal: 3840 }, height: { ideal: 2160 } }) } catch { /* refusé */ }
-      if (px() < avant) { try { await piste.applyConstraints({ width: { ideal: 4032 }, height: { ideal: 3024 } }) } catch { /* refusé */ } }
+    const gen = ++this.gen
+    this.marche = false
+    this.arreterFlux()
+    try {
+      await this.ouvrirUneFois(gen, true)
+    } catch (e) {
+      if (e instanceof Depasse || e.name === 'NotAllowedError' || e.name === 'NotFoundError' || e.name === 'NotReadableError') throw e
+      if (gen !== this.gen) throw new Depasse()
+      // second essai, plus simple : caméra rendue, pas d'ajustement de définition
+      this.arreterFlux()
+      this.etape?.('Nouvel essai…')
+      await attendreMs(400)
+      if (gen !== this.gen) throw new Depasse()
+      await this.ouvrirUneFois(gen, false)
     }
-    this.video.srcObject = this.flux
-    await this.video.play()
-    this.cv = await chargerOpenCV()
+  }
+
+  async ouvrirUneFois(gen, ajuster) {
+    const verifier = (flux) => { if (gen !== this.gen) { if (flux) flux.getTracks().forEach((t) => t.stop()); throw new Depasse() } }
+    this.etape?.('Ouverture de la caméra…')
+    const demande = navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: ajuster
+        ? { facingMode: { ideal: 'environment' }, width: { ideal: 4032 }, height: { ideal: 3024 } }
+        : { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } },
+    })
+    // caméra accordée trop tard (délai dépassé, ou ouverture remplacée) : rendue aussitôt, jamais laissée allumée
+    let abandon = false
+    demande.then((f) => { if (abandon || gen !== this.gen) f.getTracks().forEach((t) => t.stop()) }, () => {})
+    let flux
+    try { flux = await delai(demande, REGLAGES.delaiAutorisation, 'La caméra ne répond pas (autorisation ?).') }
+    catch (e) { abandon = true; throw e }
+    verifier(flux)
+    this.flux = flux
+    const piste = flux.getVideoTracks()[0]
+    if (ajuster) {
+      // garde la plus grande définition entre 4:3 (4032×3024) et 4K 16:9 (3840×2160)
+      this.etape?.('Réglage de la définition…')
+      const px = () => { const s = piste.getSettings(); return (s.width || 0) * (s.height || 0) }
+      if (px() < 3840 * 2160) {
+        const avant = px()
+        await essayer(piste.applyConstraints({ width: { ideal: 3840 }, height: { ideal: 2160 } }), REGLAGES.delaiReglage)
+        verifier()
+        if (px() < avant) { await essayer(piste.applyConstraints({ width: { ideal: 4032 }, height: { ideal: 3024 } }), REGLAGES.delaiReglage); verifier() }
+      }
+    }
+    // iOS coupe la piste (appel, autre appli, contrôle) : relance automatique
+    piste.onended = () => this.interrompue(gen)
+    piste.onmute = () => this.interrompue(gen)
+
+    this.etape?.('Démarrage de l’image…')
+    const v = this.video
+    v.muted = true; v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('autoplay', '')
+    v.srcObject = flux
+    await delai(Promise.all([v.play(), imagePrete(v)]), REGLAGES.delaiImage, 'L’image de la caméra reste noire.')
+    verifier()
+
+    if (!this.cv) {
+      this.etape?.('Chargement de la détection…')
+      this.cv = await chargerOpenCV()
+      verifier()
+    }
     this.reinit()
     this.marche = true
     requestAnimationFrame((t) => this.boucle(t))
   }
 
-  fermer() {
-    this.marche = false
-    if (this.flux) this.flux.getTracks().forEach((t) => t.stop())
+  /** Piste coupée par iOS pendant la prise de vue : on rouvre (une fois par seconde au plus). */
+  interrompue(gen) {
+    if (gen !== this.gen || !this.marche || !this.surInterruption) return
+    const t = Date.now()
+    if (t - (this.derniereInterruption || 0) < 1000) return
+    this.derniereInterruption = t
+    this.surInterruption()
+  }
+
+  arreterFlux() {
+    if (this.flux) this.flux.getTracks().forEach((t) => { t.onended = null; t.onmute = null; t.stop() })
     this.flux = null
-    this.video.srcObject = null
+    if (this.video) this.video.srcObject = null
+  }
+
+  fermer() {
+    this.gen++            // toute ouverture en cours s'arrête d'elle-même
+    this.marche = false
+    this.arreterFlux()
     release(this.petite); this.petite = null
   }
 

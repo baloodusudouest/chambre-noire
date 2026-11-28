@@ -1,12 +1,12 @@
 <script>
   // « Scanner » : l'écran de travail. Trois modes, puis la caméra plein écran. Chaque prise part aussitôt vers
   // le NAS (file d'envoi) ; la date et l'envoi dans Immich se font ensuite dans « À traiter » (étape 4).
-  import { onDestroy } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import Images from '@lucide/svelte/icons/images'
   import FileImage from '@lucide/svelte/icons/file-image'
   import BookOpen from '@lucide/svelte/icons/book-open'
   import X from '@lucide/svelte/icons/x'
-  import { Camera, REGLAGES } from '$lib/scan/camera.js'
+  import { Camera, Depasse, REGLAGES } from '$lib/scan/camera.js'
   import { abonner } from '$lib/fileEnvoi.js'
 
   const MODES = [
@@ -56,15 +56,35 @@
   async function ouvrir(m) {
     mode = m; erreur = ''; prisesSession = 0; ouverte = true
     vue = { quads: [], bon: false, petits: [], statut: 'Préparation de la caméra…', px: 0, tropPetit: false }
-    await Promise.resolve()
+    await tick()                       // 0.9.4 : la balise <video> existe avant de créer la caméra
+    if (!ouverte || !video) return
     camera = new Camera(video, dessiner)
     camera.mode = m
     camera.surPrise = declencherFlash
+    camera.etape = (texte) => { if (!vue.quads.length) vue = { ...vue, statut: texte } }
+    camera.surInterruption = () => relancer('Caméra coupée par l’iPhone : reprise…')
     const avant = camera.prises
     const compter = setInterval(() => { if (camera) prisesSession = camera.prises - avant }, 250)
     camera._compter = compter
-    try { await camera.ouvrir() }
-    catch (e) { erreur = 'Caméra inaccessible : ' + e.message; fermer() }
+    await demarrer()
+  }
+
+  /** Ouvre (ou rouvre) la caméra ; une ouverture remplacée par une autre ne signale rien. */
+  async function demarrer() {
+    const c = camera
+    if (!c) return
+    try { await c.ouvrir() }
+    catch (e) {
+      if (e instanceof Depasse || c !== camera) return
+      erreur = 'Caméra inaccessible : ' + (e.message || e.name) + ' Ferme et rouvre « Scanner » ; si ça recommence, ouvre Chambre noire dans Safari.'
+      fermer()
+    }
+  }
+
+  function relancer(texte) {
+    if (!camera || !ouverte) return
+    vue = { quads: [], bon: false, petits: [], statut: texte, px: 0, tropPetit: false }
+    demarrer()
   }
 
   // Flash blanc au moment de la prise (automatique ou déclencheur) : apparition immédiate, fondu en 0,35 s
@@ -99,11 +119,11 @@
     location.hash = '#/a-traiter'
   }
 
-  // iOS coupe la caméra en arrière-plan : on la relance au retour
+  // iOS coupe la caméra en arrière-plan : on la rend en partant, on la relance au retour (une seule ouverture à la fois)
   function visibilite() {
-    if (!ouverte) return
-    if (document.hidden) camera?.fermer()
-    else if (camera) camera.ouvrir().catch((e) => { erreur = e.message; fermer() })
+    if (!ouverte || !camera) return
+    if (document.hidden) { camera.marche = false; camera.gen++; camera.arreterFlux() }
+    else relancer('Reprise de la caméra…')
   }
   onDestroy(() => { fin(); fermer() })
   const enSecurite = $derived(Math.max(0, prisesSession - file.surIphone))

@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 0.9.4 — 28 novembre 2026 (caméra jamais bloquée à l'ouverture)
+
+- **Caméra bloquée sur « Préparation de la caméra… »** (constaté par Julien le 28/11/2026, depuis l'icône d'accueil de l'iPhone, de temps en temps) : écran noir pour de bon, voyant vert de la caméra allumé. Deux causes : aucune étape de l'ouverture n'avait de délai maximal (une lecture de la vidéo ou un ajustement de définition qui ne répond pas laissait l'écran figé), et le retour au premier plan pendant l'ouverture lançait une seconde ouverture par-dessus la première (deux caméras demandées : iOS coupe la première, l'image reste noire).
+- `frontend/src/lib/scan/camera.js` : ouverture étape par étape, chacune avec un délai (`REGLAGES.delaiAutorisation` 20 s, `delaiReglage` 3 s par ajustement, abandonné sans erreur, `delaiImage` 8 s pour la première image) ; une seule ouverture à la fois (numéro `gen`, erreur `Depasse` sans message) ; caméra accordée trop tard rendue aussitôt ; image noire : second essai sans ajustement de définition ; piste coupée par iOS (`ended`, `mute`) : reprise automatique.
+- `frontend/src/pages/Scanner.svelte` : l'étape en cours s'affiche (« Ouverture de la caméra… », « Démarrage de l'image… », « Chargement de la détection… ») ; en cas d'échec, message clair au lieu d'un écran figé ; arrière-plan : la caméra est rendue, puis rouverte une seule fois au retour ; `tick()` avant de créer la caméra.
+- Tests : `tests/test_ouverture_camera.py` (Chromium, caméra simulée) : ouverture normale, première image jamais lue puis reprise, caméra muette (message et fermeture), va-et-vient arrière-plan (une seule caméra allumée). Trois de ces quatre essais restent bloqués avec la 0.9.3. 84 tests au total.
+- **Jamais essayé sur la vraie installation (iPhone).**
+
 ## 0.9.3 — 23 novembre 2026 (listes déroulantes lisibles en sombre)
 
 - **Listes déroulantes illisibles sur PC** (constaté par Julien dans Dîme, 23/11/2026) : la liste ouverte d'un `<select>` gardait un fond blanc tout en reprenant le texte crème de l'appli. `frontend/src/app.css` reprend le bloc du socle 0.12.2 (« Listes déroulantes (socle 0.12.2) ») : choix aux couleurs des menus, titres de groupe en gras, choix désactivés en gris.
